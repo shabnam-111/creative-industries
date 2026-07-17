@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Creative Industries | Automotive Sheet Metal Solutions</title>
+  <meta name="description" content="Precision Sheet Metal Solutions for the Automotive Industry. High-quality spare stamping parts, radiator supports, and fenders based in Faridabad, India.">
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  
+  <!-- jsPDF Library CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+  
+  <div id="app-layout">
+    
+    <!-- Header -->
+    <header>
+      <div class="nav-container">
+        
+        <!-- Logo -->
+        <a href="#/" class="logo-section">
+          <div class="logo-icon">CI</div>
+          <div class="logo-text">
+            <span class="logo-title">Creative</span>
+            <span class="logo-tagline">Industries</span>
+          </div>
+        </a>
+
+        <!-- Main Navigation Links -->
+        <nav class="nav-links" id="nav-links">
+          <a href="#/" class="nav-link">Home</a>
+          <a href="#/products" class="nav-link">Products</a>
+          <a href="#/inventory" class="nav-link">Inventory</a>
+          <a href="#/industries" class="nav-link">Industries</a>
+          <a href="#/clients" class="nav-link">Clients</a>
+          <a href="#/track" class="nav-link">Track Order</a>
+          <a href="#/cart" class="nav-link">Cart</a>
+          <a href="#/about" class="nav-link">About Us</a>
+          <a href="#/contact" class="nav-link">Contact</a>
+        </nav>
+
+        <!-- Right Side Header Actions -->
+        <div class="header-actions">
+          
+          <!-- Product Search Box -->
+          <div class="header-search-container">
+            <div class="search-input-wrapper">
+              <i class="fas fa-search"></i>
+              <input type="text" class="header-search-input" id="header-search-input" placeholder="Search SKU, name, material...">
+            </div>
+            <div class="search-autocomplete-dropdown" id="search-autocomplete-dropdown">
+              <!-- Suggestion items will be injected here -->
+            </div>
+          </div>
+
+          <!-- Wishlist Badge -->
+          <button class="action-btn" onclick="window.location.hash='#/products'" title="View Wishlist">
+            <i class="fas fa-heart"></i>
+            <span class="badge" id="wishlist-badge" style="display: none;">0</span>
+          </button>
+
+          <!-- Cart Badge -->
+          <button class="action-btn" onclick="window.location.hash='#/cart'" title="View Cart">
+            <i class="fas fa-shopping-cart"></i>
+            <span class="badge" id="cart-badge" style="display: none;">0</span>
+          </button>
+
+          <!-- Client Dashboard / Profile Access -->
+          <button class="action-btn" onclick="window.location.hash='#/profile'" title="Customer Profile / Login">
+            <i class="fas fa-user-tie"></i>
+          </button>
+
+          <!-- Mobile Menu Toggle Button -->
+          <div class="mobile-menu-toggle" id="mobile-menu-toggle">
+            <i class="fas fa-bars"></i>
+          </div>
+        </div>
+
+      </div>
+    </header>
+
+    <!-- Main Content Container (SPA views injected here) -->
+    <main id="app-container">
+      <div style="padding: 10rem 2rem; text-align: center; color: var(--text-secondary);">
+        <i class="fas fa-cog fa-spin" style="font-size: 3rem; margin-bottom: 1.5rem; color: var(--primary-blue);"></i>
+        <h2>Loading Sheet Metal Catalog...</h2>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer>
+      <div class="footer-grid">
+        
+        <!-- Company Short Detail -->
+        <div class="footer-column">
+          <h3 style="color: var(--white); font-size: 1.2rem; font-family: var(--font-heading);">Creative Industries</h3>
+          <p style="margin-top: 1rem; font-size: 0.9rem; line-height: 1.6;">
+            Precision sheet metal solutions, stamping components, and drawing parts engineered for leading OEMs across India.
+          </p>
+          <div class="social-links">
+            <a href="https://linkedin.com" target="_blank" class="social-btn"><i class="fab fa-linkedin-in"></i></a>
+            <a href="https://facebook.com" target="_blank" class="social-btn"><i class="fab fa-facebook-f"></i></a>
+            <a href="https://instagram.com" target="_blank" class="social-btn"><i class="fab fa-instagram"></i></a>
+            <a href="https://youtube.com" target="_blank" class="social-btn"><i class="fab fa-youtube"></i></a>
+          </div>
+        </div>
+
+        <!-- Site Navigation -->
+        <div class="footer-column">
+          <h3>Quick Links</h3>
+          <ul class="footer-links" style="margin-top: 1rem;">
+            <li><a href="#/products"><i class="fas fa-angle-right"></i> Products</a></li>
+            <li><a href="#/inventory"><i class="fas fa-angle-right"></i> Live Inventory</a></li>
+            <li><a href="#/clients"><i class="fas fa-angle-right"></i> Our Clients</a></li>
+            <li><a href="#/track"><i class="fas fa-angle-right"></i> Track Orders</a></li>
+            <li><a href="#/about"><i class="fas fa-angle-right"></i> About Our Company</a></li>
+            <li><a href="#/contact"><i class="fas fa-angle-right"></i> Contact Us</a></li>
+          </ul>
+        </div>
+
+        <!-- Customer Support policies -->
+        <div class="footer-column">
+          <h3>Customer Support</h3>
+          <ul class="footer-links" style="margin-top: 1rem;">
+            <li><a href="#/contact"><i class="fas fa-angle-right"></i> Technical Support</a></li>
+            <li><a href="#/about"><i class="fas fa-angle-right"></i> Frequently Asked Questions</a></li>
+            <li><a href="#/shipping-policy"><i class="fas fa-angle-right"></i> Shipping & Logistics Policy</a></li>
+            <li><a href="#/privacy-policy"><i class="fas fa-angle-right"></i> Privacy Policy</a></li>
+            <li><a href="#/terms-conditions"><i class="fas fa-angle-right"></i> Terms & B2B Conditions</a></li>
+          </ul>
+        </div>
+
+        <!-- Newsletter Subscriptions -->
+        <div class="footer-column">
+          <h3>Newsletter</h3>
+          <p style="margin-top: 1rem; font-size: 0.9rem;">
+            Subscribe to our weekly sheet metal rate cards, supply reports, and catalog additions.
+          </p>
+          <form class="newsletter-form" onsubmit="event.preventDefault(); alert('Subscribed to Creative Industries newsletter!'); this.reset();">
+            <input type="email" class="newsletter-input" placeholder="Enter Business Email" required>
+            <button type="submit" class="newsletter-btn"><i class="fas fa-envelope"></i></button>
+          </form>
+        </div>
+
+      </div>
+
+      <!-- Copyright Bottom Bar -->
+      <div class="footer-bottom">
+        <span>&copy; 2026 Creative Industries. All rights reserved.</span>
+        <span>
+          Made in India | Faridabad works. 
+          <a href="#/contact" style="margin-left: 1rem; text-decoration: underline;">Support Desk</a>
+        </span>
+      </div>
+    </footer>
+
+    <!-- Floating RFQ Stamping Quote Trigger -->
+    <button class="floating-rfq-trigger" id="floating-rfq" title="Request Bulk Quotation (RFQ)">
+      <i class="fas fa-file-signature"></i>
+    </button>
+
+    <!-- Floating Comparison Panel (Bottom Drawer) -->
+    <section class="comparison-drawer" id="comparison-drawer">
+      <div class="compare-drawer-header">
+        <h4 style="color: var(--primary-blue); font-size: 0.95rem; font-weight: 700;">
+          <i class="fas fa-columns"></i> Product Comparison Drawer
+        </h4>
+        <span style="font-size: 0.8rem; color: var(--text-secondary);">Select up to 3 components to evaluate side-by-side</span>
+      </div>
+      <div class="compare-items-row" id="compare-items-row">
+        <!-- Javascript injections for compared product tags -->
+      </div>
+    </section>
+
+    <!-- Global Modals overlay wrapper -->
+    <div class="modal-overlay" id="modal-overlay">
+      <div class="modal-box">
+        <!-- Rendered layout of RFQ or Comparison grids -->
+      </div>
+    </div>
+
+    <!-- Toast alerts overlay stack -->
+    <div class="toast-container" id="toast-container"></div>
+
+  </div>
+
+  <!-- Scripts -->
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
