@@ -42,8 +42,8 @@ async function seed() {
     `;
 
     // Evaluate the file content inside a function execution context
-    const fn = new Function('window', evalCode);
-    fn.call(mockWindow, mockWindow);
+    const fn = new Function(evalCode);
+    fn.call(mockWindow);
 
     if (!mockWindow.CreativeData || !mockWindow.CreativeData.products) {
       throw new Error('Failed to find CreativeData.products in data.js');

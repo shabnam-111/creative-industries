@@ -4,9 +4,14 @@ import cors from 'cors';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 
-import productsRouter from './routes/products.js';
-import ordersRouter from './routes/orders.js';
+import productRoutes from './routes/productRoutes.js';
+import orderRoutes from './routes/orderRoutes.js';
 import profileRouter from './routes/profile.js';
+import authRouter from './routes/authRoutes.js';
+import cartRoutes from './routes/cartRoutes.js';
+import wishlistRoutes from './routes/wishlistRoutes.js';
+import adminRouter from './routes/adminRoutes.js';
+import employeeRouter from './routes/employeeRoutes.js';
 
 dotenv.config();
 
@@ -23,9 +28,14 @@ app.use(morgan('dev'));
 app.use(express.json());
 
 // Routes
-app.use('/api/products', productsRouter);
-app.use('/api/orders', ordersRouter);
+app.use('/api/products', productRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/admin', adminRouter);
+app.use('/api/employee', employeeRouter);
 app.use('/api/profile', profileRouter);
+app.use('/api/auth', authRouter);
+app.use('/api/cart', cartRoutes);
+app.use('/api/wishlist', wishlistRoutes);
 
 // Health/Status check endpoint
 app.get('/api/status', (req, res) => {

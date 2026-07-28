@@ -9,10 +9,59 @@
     return;
   }
 
+  const API_BASE_URL = "http://localhost:5000/api";
+  const TOKEN_KEY = "ci_token";
+
+  function getAuthHeaders() {
+    const token = localStorage.getItem(TOKEN_KEY);
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': token ? `Bearer ${token}` : ''
+    };
+  }
+
+  async function apiCall(endpoint, options = {}) {
+    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      headers: getAuthHeaders()
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'API Error');
+    return data;
+  }
+
+  // Add to Cart
+  async function addToCart(productId, qty = null) {
+    const prod = db.products.find(p => p.id === productId);
+    const minQty = prod?.minOrder || prod?.min_order_qty || 1;
+    const finalQty = qty && qty > minQty ? qty : minQty;
+
+    const existing = state.cart.find(item => item.productId === productId);
+    const newQty = existing ? existing.qty + finalQty : finalQty;
+
+    if (existing) {
+      existing.qty = newQty;
+    } else {
+      state.cart.push({ productId, qty: newQty });
+    }
+    saveState();
+    showToast(`Added to cart (Min order: ${minQty} pcs)`, "success");
+
+    try {
+      await apiCall('/cart/add', {
+        method: 'POST',
+        body: JSON.stringify({ productId, quantity: newQty })
+      });
+    } catch (err) {
+      console.error("Cart sync failed:", err.message);
+    }
+  }
+  window.addToCart = addToCart;
+
+
   // --- STATE MANAGEMENT ---
   const state = {
     cart: JSON.parse(localStorage.getItem("ci_cart")) || [],
-    wishlist: JSON.parse(localStorage.getItem("ci_wishlist")) || [],
     compare: JSON.parse(localStorage.getItem("ci_compare")) || [],
     recentlyViewed: JSON.parse(localStorage.getItem("ci_recently_viewed")) || [],
     orders: JSON.parse(localStorage.getItem("ci_orders")) || [
@@ -66,7 +115,6 @@
   // Sync state to localStorage on modification
   const saveState = () => {
     localStorage.setItem("ci_cart", JSON.stringify(state.cart));
-    localStorage.setItem("ci_wishlist", JSON.stringify(state.wishlist));
     localStorage.setItem("ci_compare", JSON.stringify(state.compare));
     localStorage.setItem("ci_recently_viewed", JSON.stringify(state.recentlyViewed));
     localStorage.setItem("ci_orders", JSON.stringify(state.orders));
@@ -76,13 +124,49 @@
   };
 
   // --- NOTIFICATION ENGINE ---
+  const showConfirmModal = (title, message, onConfirm) => {
+    const overlay = document.getElementById("modal-overlay");
+    if (!overlay) {
+      if (confirm(message)) onConfirm();
+      return;
+    }
+    const box = overlay.querySelector(".modal-box");
+    if (!box) return;
+
+    box.innerHTML = `
+      <div class="modal-header">
+        <h3>${title}</h3>
+        <button class="modal-close"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body" style="padding:1.5rem; text-align:center;">
+        <p style="margin-bottom:1.5rem;">${message}</p>
+        <div style="display:flex; justify-content:center; gap:1rem;">
+          <button class="btn btn-outline" id="confirm-cancel">Cancel</button>
+          <button class="btn btn-primary" id="confirm-ok" style="background:#D62828; border-color:#D62828;">Yes, Delete</button>
+        </div>
+      </div>
+    `;
+
+    overlay.classList.add("active");
+
+    const closeModal = () => overlay.classList.remove("active");
+
+    overlay.querySelector(".modal-close").addEventListener("click", closeModal);
+    document.getElementById("confirm-cancel").addEventListener("click", closeModal);
+    
+    document.getElementById("confirm-ok").addEventListener("click", () => {
+      closeModal();
+      onConfirm();
+    });
+  };
+
   const showToast = (message, type = "success") => {
     const container = document.getElementById("toast-container");
     if (!container) return;
 
     const toast = document.createElement("div");
     toast.className = `toast toast-${type}`;
-    
+
     let icon = "fa-check-circle";
     if (type === "error") icon = "fa-exclamation-circle";
     if (type === "info") icon = "fa-info-circle";
@@ -100,6 +184,45 @@
     }, 3000);
   };
 
+  function confirmFieldUpdate(fieldLabel, payload, onSuccess) {
+    const overlay = document.getElementById("modal-overlay");
+    if (!overlay) return;
+    const box = overlay.querySelector(".modal-box");
+    if (!box) return;
+
+    box.innerHTML = `
+      <div class="modal-header">
+        <h3>Update ${fieldLabel}?</h3>
+        <button class="modal-close"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body" style="padding:1.5rem;">
+        <p>Save this change to your account permanently?</p>
+        <div style="display:flex; gap:1rem; margin-top:1.5rem;">
+          <button id="confirm-update-yes" class="btn btn-primary" style="flex:1;">Yes, Update</button>
+          <button id="confirm-update-no" class="btn btn-outline" style="flex:1;">No, Cancel</button>
+        </div>
+      </div>
+    `;
+    overlay.classList.add("active");
+
+    const close = () => {
+      overlay.classList.remove("active");
+    };
+    box.querySelector(".modal-close")?.addEventListener("click", close);
+    document.getElementById("confirm-update-no")?.addEventListener("click", close);
+    document.getElementById("confirm-update-yes")?.addEventListener("click", async () => {
+      try {
+        await apiCall('/profile', { method: 'PUT', body: JSON.stringify(payload) });
+        if (typeof onSuccess === 'function') onSuccess();
+        showToast(`${fieldLabel} updated successfully`, "success");
+      } catch (err) {
+        showToast(err.message || `Failed to update ${fieldLabel}`, "error");
+      } finally {
+        close();
+      }
+    });
+  }
+
   // --- LIVE BADGES UPDATE ---
   const updateBadges = () => {
     const cartCount = state.cart.reduce((sum, item) => sum + item.qty, 0);
@@ -107,13 +230,6 @@
     if (cartBadge) {
       cartBadge.textContent = cartCount;
       cartBadge.style.display = cartCount > 0 ? "flex" : "none";
-    }
-
-    const wishlistCount = state.wishlist.length;
-    const wishlistBadge = document.getElementById("wishlist-badge");
-    if (wishlistBadge) {
-      wishlistBadge.textContent = wishlistCount;
-      wishlistBadge.style.display = wishlistCount > 0 ? "flex" : "none";
     }
 
     // Update floating compare count if drawer exists
@@ -175,21 +291,6 @@
     });
   };
 
-  // --- TOGGLES ---
-  const toggleWishlist = (productId) => {
-    const idx = state.wishlist.indexOf(productId);
-    if (idx > -1) {
-      state.wishlist.splice(idx, 1);
-      showToast("Removed from wishlist", "info");
-    } else {
-      state.wishlist.push(productId);
-      showToast("Added to wishlist", "success");
-    }
-    saveState();
-    // Re-render current page to show active states
-    router();
-  };
-
   const toggleCompare = (productId) => {
     const idx = state.compare.indexOf(productId);
     if (idx > -1) {
@@ -215,7 +316,7 @@
         const warehouses = Object.keys(p.stockByWarehouse);
         const randomWh = warehouses[Math.floor(Math.random() * warehouses.length)];
         const change = Math.random() > 0.5 ? 1 : -1;
-        
+
         // Ensure stock doesn't fall below 5 or go too high
         if (p.stockByWarehouse[randomWh] + change > 5) {
           p.stockByWarehouse[randomWh] += change;
@@ -234,12 +335,12 @@
         const totalStock = Object.values(p.stockByWarehouse).reduce((a, b) => a + b, 0);
         const stockCell = document.querySelector(`.stock-cell[data-id="${p.id}"]`);
         const statusCell = document.querySelector(`.status-cell[data-id="${p.id}"]`);
-        
+
         if (stockCell) {
           stockCell.innerHTML = `<strong>${totalStock} pcs</strong><br><span style="font-size:0.75rem;color:var(--text-secondary)">Faridabad Works</span>`;
         }
         if (statusCell) {
-          statusCell.innerHTML = totalStock > 300 
+          statusCell.innerHTML = totalStock > 300
             ? `<span class="status-badge status-instock"><i class="fas fa-check-circle"></i> In Stock</span>`
             : `<span class="status-badge status-lowstock"><i class="fas fa-exclamation-triangle"></i> Low Stock</span>`;
         }
@@ -254,7 +355,7 @@
       if (prod) {
         const totalStock = Object.values(prod.stockByWarehouse).reduce((a, b) => a + b, 0);
         detailStock.textContent = `${totalStock} pcs`;
-        
+
         // Update individual warehouse items
         Object.entries(prod.stockByWarehouse).forEach(([wh, stock]) => {
           const whEl = document.getElementById(`wh-stock-${wh.replace(/\s+/g, '')}`);
@@ -263,6 +364,242 @@
       }
     }
   };
+
+  // ===================== EMPLOYEE DASHBOARD =====================
+  const DELIVERY_STATUSES = [
+    'assigned', 'accepted', 'started', 'arrived_pickup', 'picked_up',
+    'in_transit', 'arrived_destination', 'delivered', 'failed', 'cancelled'
+  ];
+  const STATUS_LABELS = {
+    assigned: 'Assigned', accepted: 'Accept Delivery', started: 'Start Delivery',
+    arrived_pickup: 'Arrived at Pickup', picked_up: 'Picked Up Order',
+    in_transit: 'In Transit', arrived_destination: 'Arrived at Destination',
+    delivered: 'Delivered', failed: 'Delivery Failed', cancelled: 'Cancelled'
+  };
+  let gpsWatchId = null;
+  let gpsActiveDeliveryId = null;
+
+  function renderEmployeeDashboard() {
+    const container = document.getElementById("app-container");
+    container.innerHTML = `
+      <div class="section" style="max-width:1200px; margin:0 auto;">
+        <h1 class="section-title">Employee Dashboard</h1>
+        <div style="display:flex; gap:1rem; margin-bottom:2rem; flex-wrap:wrap;">
+          <button id="btn-assigned-deliveries" class="btn btn-primary">Assigned Deliveries</button>
+          <button id="btn-update-delivery" class="btn btn-primary">Update Delivery</button>
+          <button id="btn-start-gps" class="btn btn-primary">Start GPS Tracking</button>
+        </div>
+        <div id="employee-content" style="background:var(--white); padding:2rem; border-radius:var(--border-radius-lg);">
+          <p>Select an option above.</p>
+        </div>
+      </div>
+    `;
+    document.getElementById("btn-assigned-deliveries").addEventListener("click", () => viewAssignedDeliveries());
+    document.getElementById("btn-update-delivery").addEventListener("click", () => viewAssignedDeliveries(true));
+    document.getElementById("btn-start-gps").addEventListener("click", () => {
+      if (!gpsActiveDeliveryId) {
+        document.getElementById("employee-content").innerHTML = `
+          <div style="text-align:center; padding:3rem; background:var(--white); border:1px solid var(--border-color); border-radius:var(--border-radius-lg);">
+            <i class="fas fa-location-slash" style="font-size:3rem; color:var(--text-secondary); margin-bottom:1rem;"></i>
+            <h3 style="color:var(--dark-gray);">No Active Delivery</h3>
+            <p style="color:var(--text-secondary); margin-bottom:1.5rem;">You must start a delivery before GPS tracking can begin.</p>
+            <button class="btn btn-primary" onclick="document.getElementById('btn-assigned-deliveries').click()">Go to Assigned Deliveries</button>
+          </div>
+        `;
+        return;
+      }
+      startGPS(gpsActiveDeliveryId);
+    });
+  }
+
+  async function viewAssignedDeliveries(focusUpdate = false) {
+    const content = document.getElementById("employee-content");
+    content.innerHTML = `<p>Loading assigned deliveries...</p>`;
+    try {
+      const res = await apiCall('/employee/deliveries');
+      const deliveries = res.data || [];
+
+      if (deliveries.length === 0) {
+        if (focusUpdate) {
+          content.innerHTML = `<h3>Update Delivery</h3><p>You don't have any active deliveries to update right now.</p>`;
+        } else {
+          content.innerHTML = `<h3>Assigned Deliveries</h3><p>No deliveries currently assigned to you.</p>`;
+        }
+        return;
+      }
+
+      const rows = deliveries.map(d => `
+        <tr data-id="${d.id}">
+          <td>${d.orders?.order_number || '—'}</td>
+          <td>
+            ${d.orders?.users?.customers?.company_name || d.orders?.users?.email || '—'}<br>
+            <span style="font-size:0.8rem; color:var(--text-secondary)">${d.orders?.users?.phone || ''}</span>
+          </td>
+          <td>${d.pickup_location || '—'}</td>
+          <td>${d.destination || '—'}</td>
+          <td>${d.expected_delivery_time ? new Date(d.expected_delivery_time).toLocaleString() : '—'}</td>
+          <td>${d.vehicles?.vehicle_number || '—'}</td>
+          <td><span class="status-badge">${(d.status || 'assigned').replace('_', ' ')}</span></td>
+          <td><button class="btn btn-primary btn-sm btn-manage-delivery">Manage</button></td>
+        </tr>
+      `).join("");
+
+      content.innerHTML = `
+        <h3>Assigned Deliveries (${deliveries.length})</h3>
+        <div style="overflow-x:auto;">
+          <table class="admin-table" style="width:100%; border-collapse:collapse; margin-top:1rem;">
+            <thead><tr><th>Order #</th><th>Customer</th><th>Pickup</th><th>Destination</th><th>Expected By</th><th>Vehicle</th><th>Status</th><th></th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        <div id="delivery-manage-panel" style="margin-top:2rem;"></div>
+      `;
+
+      content.querySelectorAll(".btn-manage-delivery").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const id = e.target.closest("tr").getAttribute("data-id");
+          const delivery = deliveries.find(d => String(d.id) === String(id));
+          renderDeliveryManagePanel(delivery);
+          document.getElementById("delivery-manage-panel").scrollIntoView({ behavior: "smooth" });
+        });
+      });
+
+      if (focusUpdate && deliveries[0]) {
+        // If clicking 'Update Delivery', hide the table and just show the first/active delivery's manage panel
+        content.querySelector('.admin-table').parentElement.style.display = 'none';
+        content.querySelector('h3').style.display = 'none';
+        renderDeliveryManagePanel(deliveries[0]);
+      }
+    } catch (e) {
+      content.innerHTML = `<p style="color:#e74c3c;">Failed to load deliveries: ${e.message}</p>`;
+    }
+  }
+
+  function renderDeliveryManagePanel(delivery) {
+    const panel = document.getElementById("delivery-manage-panel");
+    if (!panel || !delivery) return;
+
+    const currentIdx = DELIVERY_STATUSES.indexOf(delivery.status);
+    const destQuery = encodeURIComponent(delivery.destination || '');
+
+    panel.innerHTML = `
+      <div class="dashboard-card" style="border:1px solid var(--border-color); border-radius:var(--border-radius-lg); padding:1.5rem;">
+        <h3>Manage Delivery — ${delivery.orders?.order_number || delivery.id}</h3>
+        <p style="color:var(--text-secondary);">Current status: <strong style="text-transform:capitalize;">${(delivery.status || 'assigned').replace('_', ' ')}</strong></p>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin:1rem 0;">
+          ${DELIVERY_STATUSES.map((s, i) => `
+            <button class="btn btn-sm btn-set-status" data-status="${s}"
+              style="background:${i <= currentIdx ? '#ccc' : (s === 'failed' || s === 'cancelled' ? '#D62828' : '#0B3D91')}; color:#fff;">
+              ${STATUS_LABELS[s]}
+            </button>
+          `).join("")}
+        </div>
+        <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+          <a href="https://www.google.com/maps/dir/?api=1&destination=${destQuery}" target="_blank" class="btn btn-outline">
+            <i class="fas fa-map-marked-alt"></i> Open in Google Maps
+          </a>
+          <button class="btn btn-outline btn-call-customer" data-phone="${delivery.orders?.users?.phone || ''}">
+            <i class="fas fa-phone"></i> Call Customer
+          </button>
+        </div>
+      </div>
+    `;
+
+    panel.querySelectorAll(".btn-set-status").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        const status = e.target.getAttribute("data-status");
+        if (status === 'started' && !('geolocation' in navigator)) {
+          showToast("GPS is required before starting a delivery", "error");
+          return;
+        }
+        if (status === 'cancelled' && !confirm("Cancelling requires admin approval. Send request?")) return;
+
+        try {
+          await apiCall(`/employee/deliveries/${delivery.id}/status`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status })
+          });
+          delivery.status = status;
+          showToast(`Marked as: ${STATUS_LABELS[status]}`, "success");
+
+          if (status === 'started') {
+            gpsActiveDeliveryId = delivery.id;
+            startGPS(delivery.id);
+          }
+          if (['delivered', 'failed', 'cancelled'].includes(status)) stopGPS();
+
+          renderDeliveryManagePanel(delivery);
+        } catch (err) {
+          showToast(err.message || "Failed to update status", "error");
+        }
+      });
+    });
+
+    panel.querySelectorAll(".btn-call-customer").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const phone = btn.getAttribute("data-phone");
+        if (phone) {
+          showToast(`Customer Phone: ${phone}`, "info");
+        } else {
+          showToast("Customer phone not available", "error");
+        }
+      });
+    });
+  }
+
+  function startGPS(deliveryId) {
+    if (!('geolocation' in navigator)) {
+      showToast("GPS is not available on this device/browser", "error");
+      return;
+    }
+    if (gpsWatchId !== null) {
+      showToast("GPS tracking already active", "info");
+      return;
+    }
+    gpsActiveDeliveryId = deliveryId;
+
+    gpsWatchId = navigator.geolocation.watchPosition(
+      async (pos) => {
+        try {
+          await apiCall(`/employee/deliveries/${deliveryId}/location`, {
+            method: 'POST',
+            body: JSON.stringify({
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+              speed: pos.coords.speed,
+              heading: pos.coords.heading
+            })
+          });
+        } catch (err) {
+          console.error("Location ping failed:", err.message);
+        }
+      },
+      (err) => {
+        showToast("GPS permission denied or unavailable: " + err.message, "error");
+        stopGPS();
+      },
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+    );
+    showToast("GPS tracking started", "success");
+  }
+
+  function stopGPS() {
+    if (gpsWatchId !== null) {
+      navigator.geolocation.clearWatch(gpsWatchId);
+      gpsWatchId = null;
+      gpsActiveDeliveryId = null;
+      showToast("GPS tracking stopped", "info");
+    }
+  }
+  function renderCustomerDashboard() {
+    const container = document.getElementById("app-container");
+    container.innerHTML = `
+      <div class="section">
+        <h2>Customer Dashboard</h2>
+        <p>Your orders, track deliveries, profile.</p>
+      </div>
+    `;
+  }
 
   // --- ROUTING SYSTEM ---
   const routes = {
@@ -279,6 +616,9 @@
     "/about": renderAbout,
     "/contact": renderContact,
     "/dashboard": renderDashboard,
+    "/admin": renderAdminDashboard,
+    "/employee": renderEmployeeDashboard,
+    "/customer": renderDashboard,
     "/shipping-policy": renderShippingPolicy,
     "/privacy-policy": renderPrivacyPolicy,
     "/terms-conditions": renderTermsConditions,
@@ -292,7 +632,7 @@
 
     // Remove active state from all header links
     document.querySelectorAll(".nav-link").forEach(link => link.classList.remove("active"));
-    
+
     // Auto close mobile menu
     document.getElementById("nav-links")?.classList.remove("active");
 
@@ -334,6 +674,12 @@
 
       matchedRenderer(params);
       window.scrollTo(0, 0);
+
+      const rfqBtn = document.getElementById("floating-rfq");
+      if (rfqBtn) {
+        const role = state.user?.role;
+        rfqBtn.style.display = (role === 'client') ? '' : 'none';
+      }
     } else {
       container.innerHTML = `<div class="section" style="text-align:center;"><h2>Page Not Found</h2><a href="#/" class="btn btn-primary" style="margin-top:1.5rem;">Return Home</a></div>`;
     }
@@ -370,8 +716,8 @@
       }
 
       // Filter products
-      const matches = db.products.filter(p => 
-        p.name.toLowerCase().includes(trimmed) || 
+      const matches = db.products.filter(p =>
+        p.name.toLowerCase().includes(trimmed) ||
         p.sku.toLowerCase().includes(trimmed) ||
         p.material.toLowerCase().includes(trimmed) ||
         p.compatibility.some(c => c.toLowerCase().includes(trimmed))
@@ -418,7 +764,7 @@
   // 1. HOME VIEW
   function renderHome() {
     const container = document.getElementById("app-container");
-    
+
     let clientsHtml = "";
     db.clients.forEach(c => {
       clientsHtml += `
@@ -561,249 +907,68 @@
     });
   };
 
-  // 2. PRODUCT CATALOG VIEW
-  function renderProducts() {
+  async function renderProducts() {
     const container = document.getElementById("app-container");
 
-    // Gather filter criteria options dynamically
-    const compatibilitySet = new Set();
-    const materialSet = new Set();
-    db.products.forEach(p => {
-      p.compatibility.forEach(c => compatibilitySet.add(c.split(" ")[0])); // Brand names only
-      materialSet.add(p.material);
-    });
-
-    let compFilterHtml = "";
-    compatibilitySet.forEach(brand => {
-      compFilterHtml += `
-        <label class="checkbox-label">
-          <input type="checkbox" class="filter-compat" value="${brand}">
-          <span>${brand}</span>
-        </label>
-      `;
-    });
-
-    let matFilterHtml = "";
-    materialSet.forEach(mat => {
-      matFilterHtml += `
-        <label class="checkbox-label">
-          <input type="checkbox" class="filter-material" value="${mat}">
-          <span>${mat}</span>
-        </label>
-      `;
-    });
-
     container.innerHTML = `
-      <div class="section-title-wrapper" style="margin-top: 3rem; margin-bottom: 1rem;">
-        <h2 class="section-title">Product Catalog</h2>
-        <p class="section-subtitle">OEM-grade stamping components. Add to cart to place net term orders, or select items to compare.</p>
-      </div>
+    <div class="section">
+      <h2 class="section-title">Our Premium Sheet Metal Components</h2>
+      <div id="products-grid" class="products-grid"></div>
+    </div>
+  `;
 
-      <div class="catalog-layout">
-        <!-- Sidebar Filters -->
-        <aside class="filters-sidebar">
-          <div class="filter-group">
-            <h3 class="filter-title">Vehicle Compatibility</h3>
-            <div class="filter-options">
-              ${compFilterHtml}
-            </div>
-          </div>
+    try {
+      const result = await apiCall('/products');
+      const products = result.data || result || [];
 
-          <div class="filter-group">
-            <h3 class="filter-title">Material Type</h3>
-            <div class="filter-options">
-              ${matFilterHtml}
-            </div>
-          </div>
+      let html = '';
+      products.forEach(p => {
+        const stockClass = p.stock > 0 ? 'stock-in' : 'stock-low';
+        const stockText = p.stock > 0 ? `${p.stock} pcs In Stock` : 'Out of Stock';
 
-          <div class="filter-group">
-            <h3 class="filter-title">Thickness</h3>
-            <div class="filter-options">
-              <label class="checkbox-label"><input type="checkbox" class="filter-thick" value="0.8mm"><span>0.8 mm</span></label>
-              <label class="checkbox-label"><input type="checkbox" class="filter-thick" value="1.0mm"><span>1.0 mm</span></label>
-              <label class="checkbox-label"><input type="checkbox" class="filter-thick" value="1.2mm"><span>1.2 mm</span></label>
-              <label class="checkbox-label"><input type="checkbox" class="filter-thick" value="1.5mm"><span>1.5 mm+</span></label>
-            </div>
-          </div>
-
-          <div class="filter-group">
-            <h3 class="filter-title">Availability</h3>
-            <div class="filter-options">
-              <label class="checkbox-label">
-                <input type="checkbox" id="filter-instock">
-                <span>In Stock Only</span>
-              </label>
-            </div>
-          </div>
-
-          <div class="filter-group">
-            <button class="btn btn-outline btn-sm" id="btn-clear-filters" style="width:100%;">Clear All Filters</button>
-          </div>
-        </aside>
-
-        <!-- Catalog List -->
-        <div class="products-wrapper">
-          <div class="catalog-header">
-            <span id="catalog-count" style="font-weight:600; color:var(--text-secondary);">16 Products Available</span>
-            <div style="display:flex; gap:0.5rem; align-items:center;">
-              <span style="font-size:0.9rem; color:var(--text-secondary);">Sort By:</span>
-              <select class="filter-select" id="catalog-sort" style="width:180px;">
-                <option value="popular">Popularity</option>
-                <option value="price-asc">Price: Low to High</option>
-                <option value="price-desc">Price: High to Low</option>
-                <option value="name-asc">Alphabetical</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="products-grid" id="catalog-products-grid">
-            <!-- Dynamic Injection -->
-          </div>
-        </div>
-      </div>
-    `;
-
-    // Initial draw
-    filterCatalog();
-
-    // Bind event listeners
-    document.querySelectorAll(".filter-compat, .filter-material, .filter-thick, #filter-instock").forEach(input => {
-      input.addEventListener("change", filterCatalog);
-    });
-    document.getElementById("catalog-sort")?.addEventListener("change", filterCatalog);
-    document.getElementById("btn-clear-filters")?.addEventListener("click", () => {
-      document.querySelectorAll(".filter-compat, .filter-material, .filter-thick").forEach(input => input.checked = false);
-      const instock = document.getElementById("filter-instock");
-      if (instock) instock.checked = false;
-      filterCatalog();
-    });
-  }
-
-  // Core filter calculation for catalog page
-  const filterCatalog = () => {
-    const grid = document.getElementById("catalog-products-grid");
-    if (!grid) return;
-
-    // Fetch filters state
-    const selectedBrands = Array.from(document.querySelectorAll(".filter-compat:checked")).map(el => el.value.toLowerCase());
-    const selectedMats = Array.from(document.querySelectorAll(".filter-material:checked")).map(el => el.value.toLowerCase());
-    const selectedThicks = Array.from(document.querySelectorAll(".filter-thick:checked")).map(el => el.value);
-    const inStockOnly = document.getElementById("filter-instock")?.checked || false;
-    const sortVal = document.getElementById("catalog-sort")?.value || "popular";
-
-    // Filtering logic
-    let filtered = db.products.filter(p => {
-      const matchBrand = selectedBrands.length === 0 || p.compatibility.some(c => selectedBrands.some(brand => c.toLowerCase().includes(brand)));
-      const matchMat = selectedMats.length === 0 || selectedMats.includes(p.material.toLowerCase());
-      
-      let matchThick = true;
-      if (selectedThicks.length > 0) {
-        matchThick = selectedThicks.some(thickVal => {
-          if (thickVal === "1.5mm") {
-            const rawFloat = parseFloat(p.thickness);
-            return rawFloat >= 1.5;
-          }
-          return p.thickness === thickVal;
-        });
-      }
-
-      const totalStock = Object.values(p.stockByWarehouse).reduce((a, b) => a + b, 0);
-      const matchStock = !inStockOnly || totalStock > 0;
-
-      return matchBrand && matchMat && matchThick && matchStock;
-    });
-
-    // Sorting logic
-    if (sortVal === "price-asc") {
-      filtered.sort((a, b) => a.price - b.price);
-    } else if (sortVal === "price-desc") {
-      filtered.sort((a, b) => b.price - a.price);
-    } else if (sortVal === "name-asc") {
-      filtered.sort((a, b) => a.name.localeCompare(b.name));
-    } // "popular" keeps default order
-
-    // Render count
-    const countEl = document.getElementById("catalog-count");
-    if (countEl) countEl.textContent = `${filtered.length} Products Found`;
-
-    if (filtered.length === 0) {
-      grid.innerHTML = `<div style="grid-column: 1/-1; padding: 4rem; text-align: center; background-color: var(--white); border-radius: var(--border-radius-lg); border: 1px solid var(--border-color);"><h3 style="color:var(--text-secondary);">No matching products found.</h3><p style="color:var(--text-secondary); margin-top:0.5rem;">Adjust your filter options and try again.</p></div>`;
-      return;
-    }
-
-    let cardsHtml = "";
-    filtered.forEach(p => {
-      const isWishlisted = state.wishlist.includes(p.id);
-      const isCompared = state.compare.includes(p.id);
-      const totalStock = Object.values(p.stockByWarehouse).reduce((a, b) => a + b, 0);
-
-      cardsHtml += `
-        <article class="product-card">
-          <span class="card-badge">${p.sku}</span>
+        html += `
+        <div class="product-card">
           <div class="product-card-img-wrapper">
-            <img src="${p.image}" class="product-card-img" alt="${p.name}">
+            <img src="${p.image_url || p.image}" class="product-card-img" alt="${p.name}">
           </div>
           <div class="product-card-body">
-            <h3 class="product-card-title"><a href="#/product/${p.id}">${p.name}</a></h3>
+            <h3 class="product-card-title">${p.name}</h3>
             <div class="product-card-specs">
-              <span>Mat: <strong>${p.material.split(" ")[0]}</strong></span>
-              <span>Grade: <strong>${p.grade}</strong></span>
-              <span>Thick: <strong>${p.thickness}</strong></span>
-              <span>MOQ: <strong>${p.minOrder} pcs</strong></span>
+              <span><strong>SKU:</strong> ${p.sku}</span>
+              <span><strong>Thickness:</strong> ${p.thickness || 'N/A'}</span>
+              <span><strong>Material:</strong> ${p.material || 'Steel'}</span>
             </div>
-            
-            <div class="product-card-stock">
-              <i class="fas fa-warehouse" style="color:var(--text-secondary)"></i>
-              <span class="${totalStock > 300 ? 'stock-in' : 'stock-low'}">${totalStock} pcs available</span>
-            </div>
-
             <div class="product-card-price-row">
               <div class="product-card-price">
-                <span class="price-label">Price (Est.)</span>
-                <span class="price-amount">₹${p.price.toLocaleString("en-IN")}</span>
+                <span class="price-label">Price per unit</span>
+                <span class="price-amount">₹${p.price}</span>
               </div>
-              <button class="btn btn-primary btn-sm btn-add-cart" data-id="${p.id}">
-                <i class="fas fa-shopping-cart"></i> Add
-              </button>
+              <div class="product-card-stock ${stockClass}">
+                ${stockText}
+              </div>
             </div>
-
+            <p><strong>Min Order:</strong> ${p.min_order_qty || 1} pcs</p>
+            
             <div class="card-actions">
-              <button class="wishlist-btn-toggle ${isWishlisted ? 'active' : ''}" data-id="${p.id}" title="Add to Wishlist">
-                <i class="fas fa-heart"></i>
-              </button>
-              <button class="compare-btn-toggle ${isCompared ? 'active' : ''}" data-id="${p.id}" title="Compare Product">
-                <i class="fas fa-columns"></i>
+              <button onclick="addToCart('${p.id}', 1)" class="btn btn-primary" style="flex:1;">
+                <i class="fas fa-cart-plus"></i> Add to Cart
               </button>
             </div>
           </div>
-        </article>
+        </div>
       `;
-    });
-
-    grid.innerHTML = cardsHtml;
-
-    // Attach button actions
-    grid.querySelectorAll(".btn-add-cart").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const id = btn.getAttribute("data-id");
-        addToCart(id);
       });
-    });
 
-    grid.querySelectorAll(".wishlist-btn-toggle").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const id = btn.getAttribute("data-id");
-        toggleWishlist(id);
-      });
-    });
+      document.getElementById("products-grid").innerHTML = html || "<p>No products found.</p>";
 
-    grid.querySelectorAll(".compare-btn-toggle").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const id = btn.getAttribute("data-id");
-        toggleCompare(id);
-      });
-    });
-  };
+    } catch (error) {
+      console.error(error);
+      document.getElementById("products-grid").innerHTML = `
+      <p style="color:red; text-align:center; padding:3rem;">
+        Failed to load products from server.
+      </p>`;
+    }
+  }
 
   // 3. PRODUCT DETAILS VIEW
   function renderProductDetail(params) {
@@ -823,7 +988,6 @@
     if (state.recentlyViewed.length > 4) state.recentlyViewed.pop();
     saveState();
 
-    const isWishlisted = state.wishlist.includes(prod.id);
     const isCompared = state.compare.includes(prod.id);
     const totalStock = Object.values(prod.stockByWarehouse).reduce((a, b) => a + b, 0);
 
@@ -883,7 +1047,6 @@
           <div style="display:flex; gap:1rem;">
             <button class="btn btn-outline btn-sm" id="btn-download-pdf" style="flex:1;"><i class="fas fa-file-pdf"></i> Download Spec Sheet PDF</button>
             <button class="btn btn-outline btn-sm compare-btn-toggle ${isCompared ? 'active' : ''}" id="btn-details-compare" data-id="${prod.id}" style="width:50px;"><i class="fas fa-columns"></i></button>
-            <button class="wishlist-btn-toggle ${isWishlisted ? 'active' : ''}" id="btn-details-wishlist" data-id="${prod.id}" style="width:50px; height:38px;"><i class="fas fa-heart"></i></button>
           </div>
           ${recentlyViewedHtml}
         </div>
@@ -1001,11 +1164,7 @@
       openRfqModal(prod.id);
     });
 
-    // Wishlist and Compare details trigger
-    document.getElementById("btn-details-wishlist")?.addEventListener("click", () => {
-      toggleWishlist(prod.id);
-    });
-
+    // Compare details trigger
     document.getElementById("btn-details-compare")?.addEventListener("click", () => {
       toggleCompare(prod.id);
     });
@@ -1015,24 +1174,6 @@
       generateProductPDF(prod);
     });
   }
-
-  // Add to cart state update
-  const addToCart = (productId, qty = null) => {
-    const prod = db.products.find(p => p.id === productId);
-    if (!prod) return;
-
-    const orderQty = qty === null ? prod.minOrder : qty;
-
-    const existingIdx = state.cart.findIndex(item => item.productId === productId);
-    if (existingIdx > -1) {
-      state.cart[existingIdx].qty += orderQty;
-    } else {
-      state.cart.push({ productId: productId, qty: orderQty });
-    }
-
-    saveState();
-    showToast(`Added ${orderQty} pcs of ${prod.name} to cart.`, "success");
-  };
 
   // 4. INVENTORY TABLE VIEW
   function renderInventory() {
@@ -1102,8 +1243,8 @@
 
     db.products.forEach(p => {
       // Search matches
-      const matchSearch = !query || 
-        p.name.toLowerCase().includes(query) || 
+      const matchSearch = !query ||
+        p.name.toLowerCase().includes(query) ||
         p.sku.toLowerCase().includes(query) ||
         p.grade.toLowerCase().includes(query) ||
         p.compatibility.some(c => c.toLowerCase().includes(query));
@@ -1118,7 +1259,7 @@
 
       // Status match
       const isInStock = totalAllocatedStock > 300;
-      const matchStatus = statusFilter === "all" || 
+      const matchStatus = statusFilter === "all" ||
         (statusFilter === "instock" && isInStock) ||
         (statusFilter === "lowstock" && !isInStock);
 
@@ -1150,9 +1291,9 @@
             </td>
             <td><strong style="color:var(--primary-red);">${p.minOrder} pcs</strong></td>
             <td class="status-cell" data-id="${p.id}">
-              ${totalOverallStock > 300 
-                ? `<span class="status-badge status-instock"><i class="fas fa-check-circle"></i> In Stock</span>`
-                : `<span class="status-badge status-lowstock"><i class="fas fa-exclamation-triangle"></i> Low Stock</span>`}
+              ${totalOverallStock > 300
+            ? `<span class="status-badge status-instock"><i class="fas fa-check-circle"></i> In Stock</span>`
+            : `<span class="status-badge status-lowstock"><i class="fas fa-exclamation-triangle"></i> Low Stock</span>`}
             </td>
             <td>
               <div style="display:flex; gap:0.25rem;">
@@ -1358,7 +1499,7 @@
         <h3 style="font-size:1.35rem; margin-bottom:1.5rem; border-bottom:1px solid var(--border-color); padding-bottom:0.75rem; color:var(--primary-blue)">
           <i class="fas fa-receipt"></i> Your Placed Purchase Orders (Live Tracking)
         </h3>
-        ${state.orders.length === 0 ? `
+        ${state.orders.filter(o => o.company === state.user.companyName).length === 0 ? `
           <p style="color:var(--text-secondary); text-align:center; padding:1.5rem;">No purchase orders placed yet.</p>
         ` : `
           <div class="table-responsive" style="box-shadow:none; border:none; border-radius:0;">
@@ -1374,7 +1515,7 @@
                 </tr>
               </thead>
               <tbody>
-                ${state.orders.map(o => `
+                ${state.orders.filter(o => o.company === state.user.companyName).map(o => `
                   <tr style="border-bottom:1px solid var(--border-color);">
                     <td style="padding:0.75rem 1rem; font-weight:700; color:var(--primary-blue);">${o.id}</td>
                     <td style="padding:0.75rem 1rem;">${o.date}</td>
@@ -1415,7 +1556,7 @@
     });
 
     document.querySelectorAll(".btn-cart-qty-minus").forEach(btn => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         const idx = parseInt(btn.getAttribute("data-idx"), 10);
         const item = state.cart[idx];
         const prod = db.products.find(p => p.id === item.productId);
@@ -1423,6 +1564,9 @@
           item.qty--;
           saveState();
           renderCart();
+          try {
+            await apiCall('/cart/add', { method: 'POST', body: JSON.stringify({ productId: item.productId, quantity: item.qty }) });
+          } catch (err) { console.error(err.message); }
         } else {
           showToast(`Cannot order less than MOQ (${prod.minOrder} pcs) for ${prod.name}`, "error");
         }
@@ -1430,16 +1574,20 @@
     });
 
     document.querySelectorAll(".btn-cart-qty-plus").forEach(btn => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         const idx = parseInt(btn.getAttribute("data-idx"), 10);
         state.cart[idx].qty++;
         saveState();
         renderCart();
+        try {
+          const item = state.cart[idx];
+          await apiCall('/cart/add', { method: 'POST', body: JSON.stringify({ productId: item.productId, quantity: item.qty }) });
+        } catch (err) { console.error(err.message); }
       });
     });
 
     document.querySelectorAll(".cart-qty-val").forEach(input => {
-      input.addEventListener("change", () => {
+      input.addEventListener("change", async () => {
         const idx = parseInt(input.getAttribute("data-idx"), 10);
         const item = state.cart[idx];
         const prod = db.products.find(p => p.id === item.productId);
@@ -1453,6 +1601,9 @@
         }
         saveState();
         renderCart();
+        try {
+          await apiCall('/cart/add', { method: 'POST', body: JSON.stringify({ productId: item.productId, quantity: item.qty }) });
+        } catch (err) { console.error(err.message); }
       });
     });
   }
@@ -1462,6 +1613,18 @@
     const container = document.getElementById("app-container");
 
     if (state.cart.length === 0) {
+      window.location.hash = "#/cart";
+      return;
+    }
+
+    // Block checkout if any item is below its minimum order quantity
+    const moqIssues = state.cart.filter(item => {
+      const prod = db.products.find(p => p.id === item.productId);
+      return prod && item.qty < (prod.minOrder || prod.min_order_qty || 1);
+    });
+    if (moqIssues.length > 0) {
+      const names = moqIssues.map(i => db.products.find(p => p.id === i.productId)?.name).join(', ');
+      showToast(`Please meet the minimum order quantity for: ${names}`, "error");
       window.location.hash = "#/cart";
       return;
     }
@@ -1614,10 +1777,9 @@
 
     // Process Form Submit
     const form = document.getElementById("checkout-form");
-    form?.addEventListener("submit", (e) => {
+    form?.addEventListener("submit", async (e) => {
       e.preventDefault();
 
-      // Gather form entries
       const company = document.getElementById("checkout-company").value;
       const gstVal = document.getElementById("checkout-gst").value;
       const person = document.getElementById("checkout-person").value;
@@ -1626,7 +1788,6 @@
       const address = document.getElementById("checkout-address").value;
       const paymentVal = document.querySelector('input[name="checkout-payment"]:checked').value;
 
-      // Update cached user profile data
       state.user = {
         companyName: company,
         gstNumber: gstVal,
@@ -1636,42 +1797,58 @@
         address: address
       };
 
-      // Create new Order ID
-      const newOrderId = "ORD-" + Math.floor(10000 + Math.random() * 90000);
-      const today = new Date().toISOString().split("T")[0];
+      try {
+        const res = await apiCall('/orders', {
+          method: 'POST',
+          body: JSON.stringify({ remarks: null })
+        });
+        const order = res.data;
 
-      const newOrder = {
-        id: newOrderId,
-        date: today,
-        company: company,
-        gst: gstVal,
-        items: state.cart.map(item => {
-          const prod = db.products.find(p => p.id === item.productId);
-          return {
-            productId: item.productId,
-            name: prod.name,
-            qty: item.qty,
-            price: prod.price
-          };
-        }),
-        subtotal: subtotal,
-        gstAmount: gst,
-        shipping: shipping,
-        total: total,
-        payment: paymentVal,
-        status: "Processing",
-        address: address
-      };
+        state.orders.unshift({
+          id: order.order_number,
+          date: (order.created_at || new Date().toISOString()).split("T")[0],
+          company: company,
+          gst: gstVal,
+          items: state.cart.map(item => {
+            const prod = db.products.find(p => p.id === item.productId);
+            return { productId: item.productId, name: prod?.name, qty: item.qty, price: prod?.price };
+          }),
+          subtotal: subtotal,
+          gstAmount: gst,
+          shipping: shipping,
+          total: order.total_amount || total,
+          payment: paymentVal,
+          status: "Processing",
+          address: address
+        });
 
-      // Push to state orders, save, and wipe cart
-      state.orders.unshift(newOrder);
-      state.cart = [];
-      saveState();
+        state.cart = [];
+        saveState();
+        showToast("Order placed successfully!", "success");
+        window.location.hash = `#/confirmation/${order.order_number}`;
+      } catch (err) {
+        showToast(err.message || "Failed to place order", "error");
+      }
+    });
 
-      showToast("Order placed successfully!", "success");
+    document.getElementById("checkout-person")?.addEventListener("blur", (e) => {
+      const newVal = e.target.value.trim();
+      if (newVal && newVal !== (state.user?.contactPerson || '')) {
+        confirmFieldUpdate("Contact Person Name", { fullName: newVal }, () => {
+          state.user.contactPerson = newVal;
+          saveState();
+        });
+      }
+    });
 
-      // Redirect to Confirmation page
-      window.location.hash = `#/confirmation/${newOrderId}`;
+    document.getElementById("checkout-company")?.addEventListener("blur", (e) => {
+      const newVal = e.target.value.trim();
+      if (newVal && newVal !== (state.user?.companyName || '')) {
+        confirmFieldUpdate("Company Name", { companyName: newVal }, () => {
+          state.user.companyName = newVal;
+          saveState();
+        });
+      }
     });
   }
 
@@ -1737,7 +1914,7 @@
   // 10. TRACK ORDER VIEW
   function renderTrack() {
     const container = document.getElementById("app-container");
-    
+
     // Parse query params if any
     const hash = window.location.hash;
     const urlParams = new URLSearchParams(hash.includes("?") ? hash.substring(hash.indexOf("?")) : "");
@@ -1772,62 +1949,124 @@
     });
   }
 
-  const performTracking = (query) => {
+  const performTracking = async (query) => {
     const resultsBox = document.getElementById("track-results-container");
     if (!resultsBox) return;
 
-    // Filter orders match by ID or Phone
-    const matched = state.orders.filter(o => 
-      o.id.toLowerCase() === query.toLowerCase() || 
-      state.user.phone.replace(/\s+/g, '') === query.replace(/\s+/g, '')
-    );
+    resultsBox.innerHTML = `<div style="padding:2rem; text-align:center;"><i class="fas fa-circle-notch fa-spin"></i> Searching...</div>`;
+
+    if (!localStorage.getItem("ci_token")) {
+      resultsBox.innerHTML = `
+        <div style="padding:2rem; text-align:center; background-color:var(--light-gray); border-radius:var(--border-radius); border:1px solid var(--border-color);">
+          <i class="fas fa-lock" style="font-size:2.5rem; color:var(--text-secondary); margin-bottom:1rem;"></i>
+          <h4>Please log in to track your orders.</h4>
+          <a href="#/profile" class="btn btn-primary" style="margin-top:1rem;">Log In</a>
+        </div>
+      `;
+      return;
+    }
+
+    let matched = [];
+    try {
+      const res = await apiCall('/orders');
+      const backendOrders = res.data || [];
+      matched = backendOrders
+        .filter(o =>
+          o.order_number.toLowerCase() === query.toLowerCase() ||
+          (state.user.phone || '').replace(/\s+/g, '') === query.replace(/\s+/g, '')
+        )
+        .map(o => {
+          let effStatus = o.status;
+          if (o.deliveries) {
+            const del = Array.isArray(o.deliveries) ? o.deliveries[0] : o.deliveries;
+            if (del) {
+              if (del.status === 'in_transit') effStatus = 'dispatched';
+              else if (del.status === 'delivered') effStatus = 'delivered';
+            }
+          }
+
+          return {
+          id: o.order_number,
+          date: (o.created_at || new Date().toISOString()).split("T")[0],
+          company: state.user.companyName,
+          address: state.user.address,
+          payment: o.remarks || 'Net 30',
+          status: effStatus,
+          items: (o.items || []).map(i => ({
+            productId: i.product_id || i.productId,
+            name: i.name,
+            qty: i.quantity || i.qty,
+            price: i.price
+          }))
+          };
+        });
+    } catch (err) {
+      resultsBox.innerHTML = `<p style="color:#e74c3c; text-align:center; padding:2rem;">Failed to fetch order: ${err.message}</p>`;
+      return;
+    }
 
     if (matched.length === 0) {
       resultsBox.innerHTML = `
         <div style="padding:2rem; text-align:center; background-color:var(--light-gray); border-radius:var(--border-radius); border:1px solid var(--border-color);">
           <i class="fas fa-search-minus" style="font-size:2.5rem; color:var(--text-secondary); margin-bottom:1rem;"></i>
           <h4>No active shipments found.</h4>
-          <p style="color:var(--text-secondary); font-size:0.85rem; margin-top:0.25rem;">Double check the Order ID (e.g. ORD-XXXXX) or ensure the contact number matches the profile.</p>
+          <p style="color:var(--text-secondary); font-size:0.85rem; margin-top:0.25rem;">Double check the Order ID (e.g. ORD-XXXXXX) or ensure the contact number matches your profile.</p>
         </div>
       `;
       return;
     }
 
+    const statusFlow = ["pending", "accepted", "dispatched", "delivered"];
     let searchResultsHtml = "";
 
     matched.forEach(order => {
-      // Establish status indices
-      const statuses = ["Order Received", "Processing", "Packed", "Dispatched", "In Transit", "Delivered"];
-      const currentStatusIdx = statuses.indexOf(order.status);
+      const isRejected = order.status === 'rejected';
+      const currentStatusIdx = statusFlow.indexOf(order.status);
 
       let stepsHtml = "";
-      statuses.forEach((status, idx) => {
-        let stepClass = "";
-        let iconHtml = '<i class="fas fa-circle" style="font-size:0.5rem; color:var(--text-secondary)"></i>';
-
-        if (idx < currentStatusIdx) {
-          stepClass = "completed";
-          iconHtml = '<i class="fas fa-check" style="font-size:0.65rem; color:var(--white)"></i>';
-        } else if (idx === currentStatusIdx) {
-          stepClass = "active";
-          iconHtml = '<i class="fas fa-truck-loading" style="font-size:0.65rem; color:var(--white)"></i>';
-        }
-
-        // Generate date offsets relative to order date
-        const baseDate = new Date(order.date);
-        baseDate.setDate(baseDate.getDate() + idx);
-        const dateString = idx <= currentStatusIdx ? baseDate.toLocaleDateString("en-IN", { month: 'short', day: 'numeric', year: 'numeric' }) : "--";
-
-        stepsHtml += `
-          <div class="timeline-step ${stepClass}">
-            <div class="timeline-icon">${iconHtml}</div>
+      if (isRejected) {
+        stepsHtml = `
+          <div class="timeline-step active" style="border-color:#D62828;">
+            <div class="timeline-icon" style="background:#D62828;"><i class="fas fa-times" style="font-size:0.65rem; color:var(--white)"></i></div>
             <div class="timeline-info">
-              <span class="timeline-title">${status}</span>
-              <span class="timeline-date">${dateString}</span>
+              <span class="timeline-title" style="color:#D62828;">Order Rejected</span>
+              <span class="timeline-date">Please contact support for details</span>
             </div>
           </div>
         `;
-      });
+      } else {
+        const labels = { pending: "Order Received", accepted: "Processing", dispatched: "Dispatched", delivered: "Delivered" };
+        statusFlow.forEach((status, idx) => {
+          let stepClass = "";
+          let iconHtml = '<i class="fas fa-circle" style="font-size:0.5rem; color:var(--text-secondary)"></i>';
+
+          if (idx < currentStatusIdx || (idx === currentStatusIdx && status === 'delivered')) {
+            stepClass = "completed";
+            iconHtml = '<i class="fas fa-check" style="font-size:0.65rem; color:var(--white)"></i>';
+          } else if (idx === currentStatusIdx) {
+            stepClass = "active";
+            iconHtml = '<i class="fas fa-truck-loading" style="font-size:0.65rem; color:var(--white)"></i>';
+          }
+
+          const baseDate = new Date(order.date);
+          baseDate.setDate(baseDate.getDate() + idx);
+          const now = new Date();
+          if (baseDate > now) {
+            baseDate.setTime(now.getTime());
+          }
+          const dateString = idx <= currentStatusIdx ? baseDate.toLocaleDateString("en-IN", { month: 'short', day: 'numeric', year: 'numeric' }) : "--";
+
+          stepsHtml += `
+            <div class="timeline-step ${stepClass}">
+              <div class="timeline-icon">${iconHtml}</div>
+              <div class="timeline-info">
+                <span class="timeline-title">${labels[status]}</span>
+                <span class="timeline-date">${dateString}</span>
+              </div>
+            </div>
+          `;
+        });
+      }
 
       searchResultsHtml += `
         <div style="border:1px solid var(--border-color); border-radius:var(--border-radius-lg); padding:2rem; margin-bottom:2rem; background-color:var(--white); box-shadow:var(--shadow-sm);">
@@ -1838,14 +2077,14 @@
             </div>
             <div style="text-align:right;">
               <span style="font-size:0.8rem; text-transform:uppercase; font-weight:700; color:var(--text-secondary)">Current Status</span>
-              <h3 style="font-size:1.1rem; color:#15803D;">${order.status}</h3>
+              <h3 style="font-size:1.1rem; color:${isRejected ? '#D62828' : '#15803D'}; text-transform:capitalize;">${order.status}</h3>
             </div>
           </div>
 
           <div style="margin-bottom:1.5rem; font-size:0.9rem;">
             <strong>Consigned To:</strong> ${order.company}<br>
             <strong>Destination Address:</strong> ${order.address}<br>
-            <strong>Repayment Plan:</strong> ${order.payment} terms
+            <strong>Repayment Plan:</strong> ${order.payment}
           </div>
 
           <div class="timeline">
@@ -1987,11 +2226,39 @@
   }
 
   // 13. CUSTOMER DASHBOARD VIEW
-  function renderDashboard() {
+  async function renderDashboard() {
     const container = document.getElementById("app-container");
 
+    try {
+      container.innerHTML = `<div style="padding: 3rem; text-align: center; color: var(--text-secondary);"><i class="fas fa-circle-notch fa-spin"></i> Syncing orders with Supabase...</div>`;
+      const res = await apiCall('/orders');
+      if (res && res.data) {
+        const syncedOrders = res.data.map(o => ({
+          id: o.order_number,
+          date: (o.created_at || new Date().toISOString()).split("T")[0],
+          company: state.user.companyName,
+          items: o.items.map(i => ({
+            productId: i.product_id || i.productId,
+            name: i.name,
+            qty: i.quantity || i.qty,
+            price: i.price
+          })),
+          total: o.total_amount,
+          status: o.status.charAt(0).toUpperCase() + o.status.slice(1)
+        }));
+
+        // Merge synced orders and keep other companies' orders to avoid wiping mock data
+        const otherOrders = state.orders.filter(o => o.company !== state.user.companyName);
+        state.orders = [...syncedOrders, ...otherOrders];
+        saveState();
+      }
+    } catch (err) {
+      console.error("Failed to sync orders:", err);
+    }
+
     let orderRows = "";
-    state.orders.forEach(o => {
+    const userOrders = state.orders.filter(o => o.company === state.user.companyName);
+    userOrders.forEach(o => {
       orderRows += `
         <tr style="border-bottom: 1px solid var(--border-color);">
           <td style="padding:1rem; font-weight:700; color:var(--primary-blue);">${o.id}</td>
@@ -2093,7 +2360,7 @@
 
     // Logout / Reset trigger
     document.getElementById("btn-dash-logout")?.addEventListener("click", () => {
-      if (confirm("This will clear your local cart, wishlist, and custom order history logs. Proceed?")) {
+      if (confirm("This will clear your local cart and custom order history logs. Proceed?")) {
         localStorage.clear();
         showToast("Storage flushed. Reloading...", "info");
         setTimeout(() => window.location.reload(), 1000);
@@ -2158,18 +2425,27 @@
 
     document.getElementById("profile-edit-form")?.addEventListener("submit", (e) => {
       e.preventDefault();
-      state.user = {
+      const payload = {
+        fullName: document.getElementById("edit-comp-person").value,
+        phone: document.getElementById("edit-comp-phone").value,
         companyName: document.getElementById("edit-comp-name").value,
         gstNumber: document.getElementById("edit-comp-gst").value,
-        contactPerson: document.getElementById("edit-comp-person").value,
-        phone: document.getElementById("edit-comp-phone").value,
-        email: document.getElementById("edit-comp-email").value,
         address: document.getElementById("edit-comp-address").value
       };
-      saveState();
-      overlay.classList.remove("active");
-      showToast("Business profile updated successfully!", "success");
-      renderDashboard();
+      const currentEmail = state.user.email;
+
+      confirmFieldUpdate("Profile", payload, () => {
+        state.user = {
+          ...state.user,
+          companyName: payload.companyName,
+          gstNumber: payload.gstNumber,
+          contactPerson: payload.fullName,
+          phone: payload.phone,
+          address: payload.address
+        };
+        saveState();
+        renderDashboard();
+      });
     });
   };
 
@@ -2236,7 +2512,7 @@
 
     document.getElementById("rfq-modal-form")?.addEventListener("submit", (e) => {
       e.preventDefault();
-      
+
       const comp = document.getElementById("rfq-company").value;
       const email = document.getElementById("rfq-email").value;
       const prodName = document.getElementById("rfq-product").value;
@@ -2363,7 +2639,7 @@
   };
 
   // --- PDF GENERATOR UTILITIES USING JSPD ---
-  
+
   // 1. Download Product Specification Sheet
   const generateProductPDF = (prod) => {
     const { jsPDF } = window.jspdf;
@@ -2377,12 +2653,12 @@
     // Header Title
     doc.setFillColor(11, 61, 145);
     doc.rect(5, 5, 200, 30, "F");
-    
+
     doc.setTextColor(255, 255, 255);
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(22);
     doc.text("CREATIVE INDUSTRIES", 15, 20);
-    
+
     doc.setFont("Helvetica", "normal");
     doc.setFontSize(9);
     doc.text("Precision Sheet Metal Solutions for the Automotive Industry", 15, 27);
@@ -2393,7 +2669,7 @@
     doc.setFontSize(18);
     doc.setFont("Helvetica", "bold");
     doc.text("TECHNICAL DATASHEET SPECIFICATION", 15, 50);
-    
+
     doc.setDrawColor(214, 40, 40);
     doc.setLineWidth(0.8);
     doc.line(15, 53, 195, 53);
@@ -2479,9 +2755,11 @@
     doc.setFont("Helvetica", "bold");
     doc.text("Billed To (Purchasing Entity):", 15, 50);
     doc.setFont("Helvetica", "normal");
-    doc.text(`Company Name: ${order.company}`, 15, 56);
-    doc.text(`GSTIN Number: ${order.gst}`, 15, 62);
-    doc.text(`Delivery Location: ${order.address}`, 15, 68);
+    doc.text(`Company Name: ${order.company || state.user.companyName || 'N/A'}`, 15, 56);
+    doc.text(`GSTIN Number: ${order.gst || state.user.gstNumber || 'N/A'}`, 15, 62);
+    const addressText = order.address || state.user.address || 'N/A';
+    const offset = (addressText.match(/\n/g) || []).length * 5;
+    doc.text(`Delivery Location: ${addressText}`, 15, 68);
 
     // Invoice Metadata Block
     doc.setFont("Helvetica", "bold");
@@ -2489,31 +2767,33 @@
     doc.setFont("Helvetica", "normal");
     doc.text(`Invoice ID: ${order.id}`, 130, 56);
     doc.text(`Date of Issue: ${order.date}`, 130, 62);
-    doc.text(`Repayment Scheme: ${order.payment}`, 130, 68);
+    doc.text(`Repayment Scheme: ${order.payment || "Net 30"}`, 130, 68);
 
     doc.setDrawColor(226, 232, 240);
-    doc.line(15, 75, 195, 75);
+    doc.line(15, 75 + offset, 195, 75 + offset);
 
     // Table Header
     doc.setFillColor(248, 250, 252);
-    doc.rect(15, 80, 180, 8, "F");
+    doc.rect(15, 80 + offset, 180, 8, "F");
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(9);
-    doc.text("Component Stamping Details", 17, 85);
-    doc.text("Rate (INR)", 110, 85);
-    doc.text("Qty (pcs)", 140, 85);
-    doc.text("Total Value (INR)", 165, 85);
+    doc.text("Component Stamping Details", 17, 85 + offset);
+    doc.text("Rate (INR)", 110, 85 + offset);
+    doc.text("Qty (pcs)", 140, 85 + offset);
+    doc.text("Total Value (INR)", 165, 85 + offset);
 
-    doc.line(15, 88, 195, 88);
+    doc.line(15, 88 + offset, 195, 88 + offset);
 
     // Table Rows
     doc.setFont("Helvetica", "normal");
-    let y = 94;
+    let y = 94 + offset;
     order.items.forEach(item => {
-      doc.text(item.name, 17, y);
-      doc.text(`Rs. ${item.price.toLocaleString("en-IN")}`, 110, y);
-      doc.text(`${item.qty}`, 142, y);
-      doc.text(`Rs. ${(item.price * item.qty).toLocaleString("en-IN")}`, 165, y);
+      const price = item.price || 0;
+      const qty = item.qty || 0;
+      doc.text(item.name || 'Unknown Item', 17, y);
+      doc.text(`Rs. ${price.toLocaleString("en-IN")}`, 110, y);
+      doc.text(`${qty}`, 142, y);
+      doc.text(`Rs. ${(price * qty).toLocaleString("en-IN")}`, 165, y);
       doc.line(15, y + 2, 195, y + 2);
       y += 8;
     });
@@ -2523,22 +2803,27 @@
     doc.setFont("Helvetica", "bold");
     doc.text("Financial Breakdown Details:", 15, y);
     doc.setFont("Helvetica", "normal");
-    
+
+    const calculatedSubtotal = order.subtotal || order.items.reduce((sum, item) => sum + ((item.price || 0) * (item.qty || 0)), 0);
+    const calculatedGst = order.gstAmount || calculatedSubtotal * 0.18;
+    const calculatedShipping = order.shipping !== undefined ? order.shipping : (calculatedSubtotal > 100000 ? 0 : 4500);
+    const calculatedTotal = order.total || (calculatedSubtotal + calculatedGst + calculatedShipping);
+
     doc.text("Subtotal amount (Excl. Tax):", 110, y);
-    doc.text(`Rs. ${order.subtotal.toLocaleString("en-IN")}`, 165, y);
-    
+    doc.text(`Rs. ${calculatedSubtotal.toLocaleString("en-IN")}`, 165, y);
+
     doc.text("IGST / CGST / SGST (18% rate):", 110, y + 6);
-    doc.text(`Rs. ${order.gstAmount.toLocaleString("en-IN")}`, 165, y + 6);
-    
+    doc.text(`Rs. ${calculatedGst.toLocaleString("en-IN")}`, 165, y + 6);
+
     doc.text("Logistics Freight charges:", 110, y + 12);
-    doc.text(order.shipping === 0 ? "FREE" : `Rs. ${order.shipping.toLocaleString("en-IN")}`, 165, y + 12);
+    doc.text(calculatedShipping === 0 ? "FREE" : `Rs. ${calculatedShipping.toLocaleString("en-IN")}`, 165, y + 12);
 
     doc.setDrawColor(11, 61, 145);
     doc.line(110, y + 15, 195, y + 15);
 
     doc.setFont("Helvetica", "bold");
     doc.text("Grand Final Payable Amount:", 110, y + 20);
-    doc.text(`Rs. ${order.total.toLocaleString("en-IN")}`, 165, y + 20);
+    doc.text(`Rs. ${calculatedTotal.toLocaleString("en-IN")}`, 165, y + 20);
 
     // Term conditions block
     doc.setFontSize(8);
@@ -2663,6 +2948,651 @@
     doc.save(`Quotation-Estimate-${rfq.comp.replace(/\s+/g, '')}.pdf`);
   };
 
+  function renderAdminDashboard() {
+    const container = document.getElementById("app-container");
+    container.innerHTML = `
+      <div class="section" style="max-width:1400px; margin:0 auto;">
+        <h1 class="section-title">Admin Dashboard - Full Control</h1>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:1.5rem; margin-bottom:2rem;">
+          <div class="dashboard-card">
+            <h3>Total Revenue</h3>
+            <p id="total-revenue" style="font-size:2rem; font-weight:800;">₹0</p>
+          </div>
+          <div class="dashboard-card">
+            <h3>Total Orders</h3>
+            <p id="total-orders" style="font-size:2rem; font-weight:800;">0</p>
+          </div>
+          <div class="dashboard-card">
+            <h3>Pending Orders</h3>
+            <p id="pending-orders" style="font-size:2rem; font-weight:800;">0</p>
+          </div>
+          <div class="dashboard-card">
+            <h3>Low Stock Items</h3>
+            <p id="low-stock" style="font-size:2rem; font-weight:800; color:#e74c3c;">0</p>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:1rem; margin-bottom:2rem;">
+          <button onclick="manageProducts()" class="btn btn-primary">Manage Products</button>
+          <button onclick="manageOrders()" class="btn btn-primary">Manage Orders</button>
+          <button onclick="manageUsers()" class="btn btn-primary">Manage Users</button>
+          <button onclick="viewAnalytics()" class="btn btn-primary">Analytics & Reports</button>
+        </div>
+
+        <div id="admin-content"></div>
+      </div>
+    `;
+
+    loadDashboardSummary();
+  }
+
+  async function loadDashboardSummary() {
+    try {
+      const data = await apiCall('/admin/dashboard');
+      const d = data.data || {};
+      document.getElementById("total-revenue").textContent = `₹${d.totalRevenue || 0}`;
+      document.getElementById("total-orders").textContent = d.totalOrders || 0;
+      document.getElementById("pending-orders").textContent = (d.statusCount && d.statusCount.pending) || 0;
+      document.getElementById("low-stock").textContent = d.lowStockProducts || 0;
+    } catch (e) {
+      showToast(e.message || "Failed to load dashboard summary", "error");
+    }
+  }
+
+  // ===================== MANAGE PRODUCTS =====================
+  async function manageProducts() {
+    const content = document.getElementById("admin-content");
+    content.innerHTML = `<p>Loading products...</p>`;
+    try {
+      const res = await apiCall('/products');
+      const products = res.data || [];
+
+      let rows = products.map(p => `
+        <tr data-id="${p.id}">
+          <td>${p.name}</td>
+          <td>${p.sku}</td>
+          <td><input type="number" class="form-control admin-edit-price" value="${p.price}" style="width:100px;"></td>
+          <td><input type="number" class="form-control admin-edit-stock" value="${p.stock}" style="width:90px;"></td>
+          <td>
+            <button class="btn btn-primary btn-sm btn-save-product">Save</button>
+            <button class="btn btn-outline btn-sm btn-delete-product">Delete</button>
+          </td>
+        </tr>
+      `).join("");
+
+      content.innerHTML = `
+        <div class="dashboard-card" style="margin-bottom:1.5rem;">
+          <h3>Add New Product</h3>
+          <form id="form-add-product" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:0.75rem; margin-top:1rem;">
+            <input required class="form-control" name="name" placeholder="Name">
+            <input required class="form-control" name="sku" placeholder="SKU">
+            <input required type="number" step="0.01" class="form-control" name="price" placeholder="Price">
+            <input required type="number" class="form-control" name="stock" placeholder="Stock">
+            <input type="number" class="form-control" name="min_order_qty" placeholder="Min Order Qty" value="1">
+            <button type="submit" class="btn btn-primary">Add Product</button>
+          </form>
+        </div>
+        <div class="dashboard-card">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3>All Products (${products.length})</h3>
+            <select id="admin-stock-filter" class="form-control" style="width:200px;">
+              <option value="all">All Products</option>
+              <option value="low">Low Stock (≤ 300)</option>
+            </select>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="admin-table" style="width:100%; border-collapse:collapse; margin-top:1rem;">
+              <thead><tr><th>Name</th><th>SKU</th><th>Price</th><th>Stock</th><th>Actions</th></tr></thead>
+              <tbody>${rows || '<tr><td colspan="5">No products found.</td></tr>'}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      document.getElementById("admin-stock-filter")?.addEventListener("change", (e) => {
+        const showLowOnly = e.target.value === "low";
+        content.querySelectorAll("table.admin-table tbody tr").forEach(row => {
+          if (row.querySelector("td[colspan]")) return; // skip empty state row
+          const stock = Number(row.querySelector(".admin-edit-stock").value);
+          if (showLowOnly && stock > 300) {
+            row.style.display = "none";
+          } else {
+            row.style.display = "";
+          }
+        });
+      });
+
+      document.getElementById("form-add-product").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        try {
+          await apiCall('/products', {
+            method: 'POST',
+            body: JSON.stringify({
+              name: fd.get('name'),
+              sku: fd.get('sku'),
+              price: Number(fd.get('price')),
+              stock: Number(fd.get('stock')),
+              min_order_qty: Number(fd.get('min_order_qty')) || 1
+            })
+          });
+          showToast("Product added successfully", "success");
+          manageProducts();
+        } catch (err) {
+          showToast(err.message || "Failed to add product", "error");
+        }
+      });
+
+      content.querySelectorAll(".btn-save-product").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+          const row = e.target.closest("tr");
+          const id = row.getAttribute("data-id");
+          const price = row.querySelector(".admin-edit-price").value;
+          const stock = row.querySelector(".admin-edit-stock").value;
+          try {
+            await apiCall(`/products/${id}`, {
+              method: 'PUT',
+              body: JSON.stringify({ price: Number(price), stock: Number(stock) })
+            });
+            showToast("Product updated", "success");
+          } catch (err) {
+            showToast(err.message || "Failed to update product", "error");
+          }
+        });
+      });
+
+      content.querySelectorAll(".btn-delete-product").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+          const row = e.target.closest("tr");
+          const id = row.getAttribute("data-id");
+          if (!confirm("Delete this product permanently?")) return;
+          try {
+            await apiCall(`/products/${id}`, { method: 'DELETE' });
+            showToast("Product deleted", "success");
+            manageProducts();
+          } catch (err) {
+            showToast(err.message || "Failed to delete product", "error");
+          }
+        });
+      });
+
+    } catch (e) {
+      content.innerHTML = `<p style="color:#e74c3c;">Failed to load products: ${e.message}</p>`;
+    }
+  }
+
+  // ===================== MANAGE ORDERS =====================
+  async function manageOrders() {
+    const content = document.getElementById("admin-content");
+    content.innerHTML = `<p>Loading orders...</p>`;
+    try {
+      const res = await apiCall('/admin/orders');
+      const orders = res.data || [];
+      const statuses = ['pending', 'accepted', 'rejected', 'dispatched', 'delivered', 'cancelled'];
+
+      let rows = orders.map(o => {
+        let dStatus = 'unassigned';
+        let dId = '';
+        let dEmp = '';
+        let dVeh = '';
+        let dEta = '';
+
+        if (o.deliveries) {
+          const delivery = Array.isArray(o.deliveries) ? o.deliveries[0] : o.deliveries;
+          if (delivery) {
+            dStatus = delivery.status || 'unassigned';
+            dId = delivery.id || '';
+            dEmp = delivery.users?.full_name || 'Unknown';
+            dVeh = delivery.vehicles?.vehicle_number || 'No Vehicle';
+            if (delivery.expected_delivery_time) {
+              const d = new Date(delivery.expected_delivery_time);
+              const day = String(d.getDate()).padStart(2, '0');
+              const month = String(d.getMonth() + 1).padStart(2, '0');
+              const year = d.getFullYear();
+              let hours = d.getHours();
+              const minutes = String(d.getMinutes()).padStart(2, '0');
+              const ampm = hours >= 12 ? 'PM' : 'AM';
+              hours = hours % 12;
+              hours = hours ? hours : 12;
+              dEta = `${day}/${month}/${year} ${hours}:${minutes} ${ampm}`;
+            }
+          }
+        }
+        const dStatusDisplay = dStatus.replace('_', ' ').toUpperCase();
+        let deliveryDisplay = `<span class="status-badge" style="font-size:0.75rem; padding:0.25rem 0.5rem; background-color:var(--light-gray); color:var(--text-secondary); border-radius:4px; font-weight:bold;">${dStatusDisplay}</span>`;
+        if (dId && dStatus !== 'unassigned') {
+          deliveryDisplay += `<br><small style="color:var(--text-secondary); display:block; margin-top:0.3rem;">Assigned to: ${dEmp}</small>`;
+          deliveryDisplay += `<small style="color:var(--text-secondary); display:block;">Vehicle: ${dVeh}</small>`;
+        }
+        
+        const actionBtnLabel = dId ? 'Re-Assign' : 'Assign Delivery';
+        
+        // Convert the existing delivery object to string to pass to the modal
+        const deliveryData = (o.deliveries && (Array.isArray(o.deliveries) ? o.deliveries[0] : o.deliveries)) || null;
+        const encodedDelivery = deliveryData ? encodeURIComponent(JSON.stringify(deliveryData)) : '';
+
+        let effectiveStatus = o.status;
+        if (dStatus === 'in_transit') effectiveStatus = 'dispatched';
+        else if (dStatus === 'delivered') effectiveStatus = 'delivered';
+
+        return `
+        <tr data-id="${o.id}" data-order-number="${o.order_number}" data-destination="${o.users?.customers?.shipping_address || ''}" data-delivery="${encodedDelivery}" style="border-bottom:1px solid #eee;">
+          <td style="padding:12px 10px; vertical-align:middle; text-align:left;">${o.order_number}</td>
+          <td style="padding:12px 10px; vertical-align:middle; text-align:left;">${o.users?.customers?.company_name || o.users?.email || '—'}</td>
+          <td style="padding:12px 10px; vertical-align:middle; text-align:left;">₹${o.total_amount}</td>
+          <td style="padding:12px 10px; vertical-align:middle; text-align:left;">
+            <select class="form-control admin-order-status" style="width:auto; min-width:130px;">
+              ${statuses.map(s => `<option value="${s}" ${s === effectiveStatus ? 'selected' : ''}>${s}</option>`).join("")}
+            </select>
+          </td>
+          <td style="padding:12px 10px; vertical-align:middle; text-align:left;">${deliveryDisplay}</td>
+          <td style="padding:12px 10px; vertical-align:middle; text-align:left;">${dEta ? `<span style="font-size:0.85rem;">${dEta}</span>` : '<span style="color:var(--text-secondary); font-size:0.85rem;">—</span>'}</td>
+          <td style="padding:12px 10px; vertical-align:middle; text-align:left; white-space:nowrap;">
+            <button class="btn btn-primary btn-sm btn-update-order">Update</button>
+            ${o.status === 'accepted' ? `<button class="btn btn-sm btn-assign-delivery" style="margin-left:0.3rem; background:#0B3D91; color:#fff; border:none;">${actionBtnLabel}</button>` : ''}
+          </td>
+        </tr>
+      `}).join("");
+
+      content.innerHTML = `
+        <div class="dashboard-card">
+          <h3>All Orders (${orders.length})</h3>
+          <div style="overflow-x:auto;">
+            <table class="admin-table" style="width:100%; border-collapse:collapse; margin-top:1rem; text-align:left;">
+              <thead>
+                <tr style="background:#f8f9fa;">
+                  <th style="padding:12px 10px; text-align:left; border-bottom:2px solid #ccc;">Order #</th>
+                  <th style="padding:12px 10px; text-align:left; border-bottom:2px solid #ccc;">Customer</th>
+                  <th style="padding:12px 10px; text-align:left; border-bottom:2px solid #ccc;">Total</th>
+                  <th style="padding:12px 10px; text-align:left; border-bottom:2px solid #ccc;">Status</th>
+                  <th style="padding:12px 10px; text-align:left; border-bottom:2px solid #ccc;">Delivery</th>
+                  <th style="padding:12px 10px; text-align:left; border-bottom:2px solid #ccc;">Expected ETA</th>
+                  <th style="padding:12px 10px; text-align:left; border-bottom:2px solid #ccc;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>${rows || '<tr><td colspan="7">No orders found.</td></tr>'}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      content.querySelectorAll(".btn-update-order").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+          const row = e.target.closest("tr");
+          const id = row.getAttribute("data-id");
+          const status = row.querySelector(".admin-order-status").value;
+          try {
+            await apiCall(`/admin/orders/${id}/status`, {
+              method: 'PATCH',
+              body: JSON.stringify({ status })
+            });
+            showToast("Order status updated", "success");
+            manageOrders();
+          } catch (err) {
+            showToast(err.message || "Failed to update order", "error");
+          }
+        });
+      });
+
+      content.querySelectorAll(".btn-assign-delivery").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const row = e.target.closest("tr");
+          const orderId = row.getAttribute("data-id");
+          const orderNumber = row.getAttribute("data-order-number");
+          const destination = row.getAttribute("data-destination");
+          const deliveryDataStr = row.getAttribute("data-delivery");
+          const deliveryData = deliveryDataStr ? JSON.parse(decodeURIComponent(deliveryDataStr)) : null;
+          openAssignDeliveryModal(orderId, orderNumber, destination, deliveryData);
+        });
+      });
+
+    } catch (e) {
+      content.innerHTML = `<p style="color:#e74c3c;">Failed to load orders: ${e.message}</p>`;
+    }
+  }
+
+  // ===================== ASSIGN DELIVERY MODAL =====================
+  async function openAssignDeliveryModal(orderId, orderNumber, defaultDestination = '', existingDelivery = null) {
+    const deliveryId = existingDelivery ? existingDelivery.id : '';
+    const defEmp = existingDelivery ? existingDelivery.employee_id : '';
+    const defVeh = existingDelivery ? existingDelivery.vehicle_id : '';
+    const defPickup = existingDelivery ? existingDelivery.pickup_location : 'Faridabad Works';
+    const destFromDB = existingDelivery ? existingDelivery.destination : '';
+    const defDest = (destFromDB && destFromDB.toLowerCase() !== 'test') ? destFromDB : defaultDestination;
+    
+    let defEta = '';
+    if (existingDelivery && existingDelivery.expected_delivery_time) {
+      const d = new Date(existingDelivery.expected_delivery_time);
+      defEta = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    }
+
+    const overlay = document.getElementById("modal-overlay");
+    if (!overlay) return;
+    const box = overlay.querySelector(".modal-box");
+    if (!box) return;
+
+    box.innerHTML = `<div class="modal-body" style="padding:2rem; text-align:center;"><i class="fas fa-circle-notch fa-spin"></i> Loading employees & vehicles...</div>`;
+    overlay.classList.add("active");
+
+    try {
+      const [empRes, vehRes] = await Promise.all([
+        apiCall('/admin/employees'),
+        apiCall('/admin/vehicles')
+      ]);
+      const employees = empRes.data || [];
+      const vehicles = vehRes.data || [];
+
+      box.innerHTML = `
+        <div class="modal-header">
+          <h3><i class="fas fa-truck"></i> ${deliveryId ? 'Re-Assign' : 'Assign'} Delivery — ${orderNumber}</h3>
+          <button class="modal-close"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body" style="padding:1.5rem;">
+          <form id="assign-delivery-form">
+            <div class="form-group">
+              <label>Employee *</label>
+              <select class="form-control" id="assign-employee" required>
+                <option value="" disabled ${!defEmp ? 'selected' : ''}>-- Select Employee --</option>
+                ${employees.map(emp => {
+                  const isAssignedToThis = (emp.user_id === defEmp);
+                  const disableOpt = (emp.isBusy && !isAssignedToThis) ? 'disabled' : '';
+                  const selectedOpt = isAssignedToThis ? 'selected' : '';
+                  return `<option value="${emp.user_id}" ${disableOpt} ${selectedOpt}>${emp.users?.full_name || emp.employee_id} (${emp.employee_id})${(emp.isBusy && !isAssignedToThis) ? ' — Currently on a delivery' : ''}</option>`;
+                }).join("")}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Vehicle</label>
+              <select class="form-control" id="assign-vehicle">
+                <option value="" ${!defVeh ? 'selected' : ''}>-- No Vehicle --</option>
+                ${vehicles.map(v => {
+                  const isAssignedToThis = (v.id === defVeh);
+                  const disableOpt = (v.isBusy && !isAssignedToThis) ? 'disabled' : '';
+                  const selectedOpt = isAssignedToThis ? 'selected' : '';
+                  return `<option value="${v.id}" ${disableOpt} ${selectedOpt}>${v.vehicle_number}${(v.isBusy && !isAssignedToThis) ? ' (Busy)' : ''}</option>`;
+                }).join("")}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Pickup Location</label>
+              <input type="text" class="form-control" id="assign-pickup" value="${defPickup}">
+            </div>
+            <div class="form-group">
+              <label>Destination *</label>
+              <input type="text" class="form-control" id="assign-destination" required value="${defDest}">
+            </div>
+            <div class="form-group">
+              <label>Expected Delivery Date/Time</label>
+              <input type="datetime-local" class="form-control" id="assign-eta" value="${defEta}">
+            </div>
+              <button type="submit" class="btn btn-primary" style="width:100%; margin-top:1rem;">${deliveryId ? 'Re-Assign Delivery' : 'Assign Delivery'}</button>
+          </form>
+        </div>
+      `;
+
+      overlay.querySelector(".modal-close")?.addEventListener("click", () => overlay.classList.remove("active"));
+
+      document.getElementById("assign-delivery-form")?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const employee_id = document.getElementById("assign-employee").value;
+        const vehicle_id = document.getElementById("assign-vehicle").value || null;
+        const pickup_location = document.getElementById("assign-pickup").value;
+        const destination = document.getElementById("assign-destination").value;
+        const eta = document.getElementById("assign-eta").value;
+
+        try {
+          const endpoint = deliveryId ? `/admin/deliveries/${deliveryId}` : '/admin/deliveries';
+          const method = deliveryId ? 'PUT' : 'POST';
+          await apiCall(endpoint, {
+            method: method,
+            body: JSON.stringify({
+              order_id: orderId,
+              employee_id,
+              vehicle_id,
+              pickup_location,
+              destination,
+              expected_delivery_time: eta ? new Date(eta).toISOString() : null
+            })
+          });
+          showToast(deliveryId ? "Delivery reassigned successfully" : "Delivery assigned successfully", "success");
+          overlay.classList.remove("active");
+          manageOrders();
+        } catch (err) {
+          showToast(err.message || "Failed to assign delivery", "error");
+        }
+      });
+
+    } catch (err) {
+      box.innerHTML = `<div class="modal-body" style="padding:2rem;"><p style="color:#e74c3c;">Failed to load: ${err.message}</p></div>`;
+    }
+  }
+
+  // ===================== MANAGE USERS =====================
+  async function manageUsers() {
+    const content = document.getElementById("admin-content");
+    content.innerHTML = `<p>Loading users...</p>`;
+    try {
+      const res = await apiCall('/admin/users');
+      const users = res.data || [];
+
+      let rows = users.map(u => `
+        <tr data-id="${u.id}" data-name="${encodeURIComponent(u.full_name || '')}" data-email="${encodeURIComponent(u.email || '')}" data-role="${u.role}" data-company="${encodeURIComponent(u.customers?.company_name || '')}" style="border-bottom:1px solid #eee;">
+          <td style="padding:12px 10px; vertical-align:middle;">${u.full_name || u.customers?.company_name || '—'}</td>
+          <td style="padding:12px 10px; vertical-align:middle;">${u.email}</td>
+          <td style="padding:12px 10px; vertical-align:middle;">${u.role}</td>
+          <td style="padding:12px 10px; vertical-align:middle;">${u.customers?.company_name || ''}</td>
+          <td style="padding:12px 10px; vertical-align:middle;"><span class="status-badge" style="color:${u.status === 'active' ? '#2E7D32' : '#D62828'};">${u.status}</span></td>
+          <td style="padding:12px 10px; vertical-align:middle; white-space:nowrap;">
+            <button class="btn btn-outline btn-sm btn-toggle-user-status">
+              ${u.status === 'active' ? 'Suspend' : 'Activate'}
+            </button>
+            <button class="btn btn-primary btn-sm btn-edit-user" style="margin-left:0.3rem;">Edit</button>
+            <button class="btn btn-sm btn-delete-user" style="margin-left:0.3rem; background:#D62828; color:#fff; border:none;">Delete</button>
+          </td>
+        </tr>
+      `).join("");
+
+      content.innerHTML = `
+        <div class="dashboard-card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+            <h3>All Users (${users.length})</h3>
+            <button class="btn btn-primary" id="btn-add-user"><i class="fas fa-plus"></i> Add User</button>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="admin-table" style="width:100%; border-collapse:collapse; text-align:left;">
+              <thead>
+                <tr style="background:#f8f9fa;">
+                  <th style="padding:12px 10px; text-align:left; border-bottom:2px solid #ccc;">Name</th>
+                  <th style="padding:12px 10px; text-align:left; border-bottom:2px solid #ccc;">Email</th>
+                  <th style="padding:12px 10px; text-align:left; border-bottom:2px solid #ccc;">Role</th>
+                  <th style="padding:12px 10px; text-align:left; border-bottom:2px solid #ccc;">Company</th>
+                  <th style="padding:12px 10px; text-align:left; border-bottom:2px solid #ccc;">Status</th>
+                  <th style="padding:12px 10px; text-align:left; border-bottom:2px solid #ccc;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>${rows || '<tr><td colspan="6">No users found.</td></tr>'}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      document.getElementById("btn-add-user")?.addEventListener("click", () => openManageUserModal(null));
+
+      content.querySelectorAll(".btn-edit-user").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const row = e.target.closest("tr");
+          openManageUserModal({
+            id: row.getAttribute("data-id"),
+            name: decodeURIComponent(row.getAttribute("data-name")),
+            email: decodeURIComponent(row.getAttribute("data-email")),
+            role: row.getAttribute("data-role"),
+            company: decodeURIComponent(row.getAttribute("data-company"))
+          });
+        });
+      });
+
+      content.querySelectorAll(".btn-delete-user").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const row = e.target.closest("tr");
+          const id = row.getAttribute("data-id");
+          
+          showConfirmModal(
+            "<i class='fas fa-exclamation-triangle' style='color:#D62828;'></i> Confirm Deletion",
+            "Are you sure you want to permanently delete this user?<br>This will also securely wipe their associated data and profiles.",
+            async () => {
+              try {
+                await apiCall(`/admin/users/${id}`, { method: 'DELETE' });
+                showToast("User deleted successfully", "success");
+                manageUsers();
+              } catch (err) {
+                showToast(err.message || "Failed to delete user", "error");
+              }
+            }
+          );
+        });
+      });
+
+      content.querySelectorAll(".btn-toggle-user-status").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+          const row = e.target.closest("tr");
+          const id = row.getAttribute("data-id");
+          const currentlyActive = e.target.textContent.trim() === 'Suspend';
+          const newStatus = currentlyActive ? 'suspended' : 'active';
+          try {
+            await apiCall(`/admin/users/${id}/status`, {
+              method: 'PATCH',
+              body: JSON.stringify({ status: newStatus })
+            });
+            showToast(`User ${newStatus}`, "success");
+            manageUsers();
+          } catch (err) {
+            showToast(err.message || "Failed to update user status", "error");
+          }
+        });
+      });
+
+    } catch (e) {
+      content.innerHTML = `<p style="color:#e74c3c;">Failed to load users: ${e.message}</p>`;
+    }
+  }
+
+  function openManageUserModal(user) {
+    const isEdit = !!user;
+    const overlay = document.getElementById("modal-overlay");
+    if (!overlay) return;
+    const box = overlay.querySelector(".modal-box");
+    if (!box) return;
+
+    box.innerHTML = `
+      <div class="modal-header">
+        <h3><i class="fas fa-user"></i> ${isEdit ? 'Edit User' : 'Add New User'}</h3>
+        <button class="modal-close"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body" style="padding:1.5rem;">
+        <form id="manage-user-form">
+          <div class="form-group">
+            <label>Full Name *</label>
+            <input type="text" class="form-control" id="mu-name" required value="${isEdit ? user.name : ''}">
+          </div>
+          <div class="form-group">
+            <label>Email *</label>
+            <input type="email" class="form-control" id="mu-email" required value="${isEdit ? user.email : ''}" ${isEdit ? 'readonly style="background:#f0f0f0; cursor:not-allowed;"' : ''}>
+          </div>
+          ${!isEdit ? `
+          <div class="form-group">
+            <label>Password *</label>
+            <input type="password" class="form-control" id="mu-password" required placeholder="Enter password for new user">
+          </div>
+          ` : ''}
+          <div class="form-group">
+            <label>Role *</label>
+            <select class="form-control" id="mu-role" required>
+              <option value="customer" ${isEdit && user.role === 'customer' ? 'selected' : ''}>Customer</option>
+              <option value="employee" ${isEdit && user.role === 'employee' ? 'selected' : ''}>Employee</option>
+              <option value="admin" ${isEdit && user.role === 'admin' ? 'selected' : ''}>Admin</option>
+              <option value="client" ${isEdit && user.role === 'client' ? 'selected' : ''}>Client</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Company Name (If Customer/Client)</label>
+            <input type="text" class="form-control" id="mu-company" value="${isEdit ? user.company : ''}">
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%; margin-top:1rem;">
+            ${isEdit ? 'Update User' : 'Create User'}
+          </button>
+        </form>
+      </div>
+    `;
+
+    overlay.classList.add("active");
+    overlay.querySelector(".modal-close")?.addEventListener("click", () => overlay.classList.remove("active"));
+
+    document.getElementById("manage-user-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const payload = {
+        full_name: document.getElementById("mu-name").value,
+        role: document.getElementById("mu-role").value,
+        company_name: document.getElementById("mu-company").value
+      };
+      
+      if (!isEdit) {
+        payload.email = document.getElementById("mu-email").value;
+        payload.password = document.getElementById("mu-password").value;
+      }
+
+      try {
+        if (isEdit) {
+          await apiCall(`/admin/users/${user.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+          showToast("User updated successfully", "success");
+        } else {
+          await apiCall('/admin/users', { method: 'POST', body: JSON.stringify(payload) });
+          showToast("User created successfully", "success");
+        }
+        overlay.classList.remove("active");
+        manageUsers();
+      } catch (err) {
+        showToast(err.message || "Failed to save user", "error");
+      }
+    });
+  }
+
+  // ===================== ANALYTICS & REPORTS =====================
+  async function viewAnalytics() {
+    const content = document.getElementById("admin-content");
+    content.innerHTML = `<p>Loading analytics...</p>`;
+    try {
+      const res = await apiCall('/admin/dashboard');
+      const d = res.data || {};
+      const sc = d.statusCount || {};
+
+      content.innerHTML = `
+        <div class="dashboard-card">
+          <h3>Order Status Breakdown</h3>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1rem; margin-top:1rem;">
+            ${Object.entries(sc).map(([status, count]) => `
+              <div style="text-align:center; padding:1rem; border:1px solid var(--border-color); border-radius:var(--border-radius);">
+                <div style="font-size:1.8rem; font-weight:800;">${count}</div>
+                <div style="text-transform:capitalize; color:var(--text-secondary);">${status}</div>
+              </div>
+            `).join("")}
+          </div>
+          <p style="margin-top:1.5rem;"><strong>Total Revenue:</strong> ₹${d.totalRevenue || 0}</p>
+          <p><strong>Total Orders:</strong> ${d.totalOrders || 0}</p>
+          <p><strong>Low Stock Products:</strong> ${d.lowStockProducts || 0}</p>
+        </div>
+      `;
+    } catch (e) {
+      content.innerHTML = `<p style="color:#e74c3c;">Failed to load analytics: ${e.message}</p>`;
+    }
+  }
+
+  // Expose admin panel functions for inline onclick="" handlers
+  window.manageProducts = manageProducts;
+  window.manageOrders = manageOrders;
+  window.manageUsers = manageUsers;
+  window.viewAnalytics = viewAnalytics;
+
+
   // --- POLICY PAGES RENDERING ---
 
   // 14. SHIPPING & LOGISTICS POLICY
@@ -2785,113 +3715,93 @@
   // 17. LOGIN / REGISTER PROFILE
   function renderProfile() {
     const container = document.getElementById("app-container");
-    if (state.isLoggedIn) {
+    const token = localStorage.getItem("ci_token");
+    const getRoleRoute = (role) => {
+      if (role === 'admin') return "#/admin";
+      if (role === 'employee') return "#/employee";
+      return "#/customer";
+    };
+
+    if (token) {
+      const displayName = state.user?.contactPerson || state.user?.company_name || state.user?.email?.split('@')[0] || 'User';
+      const displayCompany = state.user?.companyName || state.user?.company_name || '';
+      const dashboardRoute = getRoleRoute(state.user?.role);
+
       container.innerHTML = `
         <div class="section" style="max-width:650px; margin:4rem auto; padding:3rem 2rem; background-color:var(--white); border-radius:var(--border-radius-lg); border:1px solid var(--border-color); box-shadow:var(--shadow-md);">
           <div style="text-align:center; padding-bottom:1.5rem; border-bottom:1px solid var(--border-color); margin-bottom:1.5rem;">
-            <div style="width:70px; height:70px; border-radius:50%; background-color:var(--primary-blue); color:var(--white); font-weight:800; font-size:2rem; display:flex; align-items:center; justify-content:center; margin:0 auto 1rem;">
-              ${state.user.contactPerson.charAt(0)}
-            </div>
-            <h2 style="color:var(--dark-gray); font-size:1.6rem;">Welcome back, ${state.user.contactPerson}</h2>
-            <span style="font-size:0.9rem; color:var(--text-secondary); font-weight:600;">${state.user.companyName}</span>
+            <h2>Welcome, ${displayName}</h2>
+            <p>${displayCompany}</p>
           </div>
-
-          <div style="display:flex; flex-direction:column; gap:1rem; font-size:0.95rem; margin-bottom:2rem;">
-            <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--light-gray); padding-bottom:0.5rem;">
-              <span style="color:var(--text-secondary)">GSTIN Number:</span>
-              <strong>${state.user.gstNumber}</strong>
-            </div>
-            <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--light-gray); padding-bottom:0.5rem;">
-              <span style="color:var(--text-secondary)">Phone Contact:</span>
-              <strong>${state.user.phone}</strong>
-            </div>
-            <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--light-gray); padding-bottom:0.5rem;">
-              <span style="color:var(--text-secondary)">Email Address:</span>
-              <strong>${state.user.email}</strong>
-            </div>
-            <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--light-gray); padding-bottom:0.5rem;">
-              <span style="color:var(--text-secondary)">Delivery Site:</span>
-              <strong style="text-align:right; max-width:60%;">${state.user.address}</strong>
-            </div>
-          </div>
-
           <div style="display:flex; gap:1rem;">
-            <a href="#/dashboard" class="btn btn-primary" style="flex:1;"><i class="fas fa-tachometer-alt"></i> Go to Dashboard</a>
-            <button class="btn btn-outline" id="btn-profile-logout" style="flex:1; border-color:var(--border-color); color:var(--primary-red);"><i class="fas fa-sign-out-alt"></i> Log Out</button>
+            <a href="${dashboardRoute}" class="btn btn-primary" style="flex:1;">Dashboard</a>
+            <button id="btn-logout" class="btn btn-outline" style="flex:1;">Log Out</button>
           </div>
         </div>
       `;
 
-      document.getElementById("btn-profile-logout")?.addEventListener("click", () => {
+      document.getElementById("btn-logout").addEventListener("click", () => {
+        localStorage.removeItem("ci_token");
+        localStorage.removeItem("ci_user");
         state.isLoggedIn = false;
+        state.user = {
+          companyName: "Automotive Solutions India",
+          gstNumber: "07AAAAS9876M1ZX",
+          contactPerson: "Rajesh Kumar",
+          phone: "+91 98123 45678",
+          email: "r.kumar@autosolutions.in",
+          address: "Plot 120, Sector 5, Sanjay Colony, Sector-23, Faridabad, Haryana - 121005"
+        };
         saveState();
-        showToast("Logged out successfully.", "info");
         renderProfile();
       });
+
     } else {
-      // Not logged in -> Render login/signup tabs
       container.innerHTML = `
         <div class="section" style="max-width:550px; margin:4rem auto; padding:3rem 2rem; background-color:var(--white); border-radius:var(--border-radius-lg); border:1px solid var(--border-color); box-shadow:var(--shadow-md);">
           <div style="display:flex; border-bottom:2px solid var(--border-color); margin-bottom:2rem;">
-            <button id="tab-login" class="btn" style="flex:1; background:none; border:none; padding:1rem; border-bottom:3px solid var(--primary-blue); font-weight:700; color:var(--primary-blue); border-radius:0;">B2B Login</button>
-            <button id="tab-signup" class="btn" style="flex:1; background:none; border:none; padding:1rem; font-weight:500; color:var(--text-secondary); border-radius:0;">Register Account</button>
+            <button id="tab-login" class="btn" style="flex:1; border-bottom:3px solid var(--primary-blue);">Login</button>
+            <button id="tab-signup" class="btn" style="flex:1;">Register</button>
           </div>
 
-          <!-- Login Panel -->
           <div id="panel-login">
             <form id="form-login">
               <div class="form-group">
-                <label for="login-email">Registered Email *</label>
-                <input type="email" class="form-control" id="login-email" value="${state.user.email}" placeholder="procurement@yourcompany.com" required>
+                <input type="email" class="form-control" id="login-email" placeholder="Email" required>
               </div>
-              <div class="form-group" style="margin-bottom:2rem;">
-                <label for="login-pwd">Password *</label>
-                <input type="password" class="form-control" id="login-pwd" value="123456" placeholder="Enter password" required>
+              <div class="form-group">
+                <input type="password" class="form-control" id="login-pwd" placeholder="Password" required>
               </div>
-              <button type="submit" class="btn btn-primary" style="width:100%; font-size:1.05rem;"><i class="fas fa-sign-in-alt"></i> Log In</button>
+              <button type="submit" class="btn btn-primary" style="width:100%;">Login</button>
             </form>
           </div>
 
-          <!-- Signup Panel -->
           <div id="panel-signup" style="display:none;">
             <form id="form-signup">
               <div class="form-group">
-                <label for="reg-company">Company Name *</label>
-                <input type="text" class="form-control" id="reg-company" placeholder="e.g. Maruti Solutions Ltd." required>
+                <input type="text" class="form-control" id="reg-company" placeholder="Company Name" required>
               </div>
               <div class="form-group">
-                <label for="reg-gst">Corporate GSTIN (15-Digit) *</label>
-                <input type="text" class="form-control" id="reg-gst" placeholder="06AABCXXXXX1Z0" pattern="^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$" required>
+                <input type="text" class="form-control" id="reg-name" placeholder="Contact Person Name" required>
               </div>
               <div class="form-group">
-                <label for="reg-person">Contact Person *</label>
-                <input type="text" class="form-control" id="reg-person" placeholder="e.g. Amit Sharma" required>
-              </div>
-              <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
-                <div class="form-group">
-                  <label for="reg-phone">Phone *</label>
-                  <input type="tel" class="form-control" id="reg-phone" placeholder="+91 9XXXX XXXXX" required>
-                </div>
-                <div class="form-group">
-                  <label for="reg-email">Email Address *</label>
-                  <input type="email" class="form-control" id="reg-email" placeholder="amit@company.com" required>
-                </div>
+                <input type="text" class="form-control" id="reg-gst" placeholder="GSTIN Number (15-Digit)" pattern="^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$" required>
               </div>
               <div class="form-group">
-                <label for="reg-address">Delivery Address *</label>
-                <textarea class="form-control" id="reg-address" rows="2" placeholder="Factory address for cargo freight delivery..." required></textarea>
+                <textarea class="form-control" id="reg-address" placeholder="Business Address" rows="2" required></textarea>
               </div>
-              <div class="form-group" style="margin-bottom:2rem;">
-                <label for="reg-pwd">Create Password *</label>
-                <input type="password" class="form-control" id="reg-pwd" placeholder="Min 6 characters" minlength="6" required>
+              <div class="form-group">
+                <input type="email" class="form-control" id="reg-email" placeholder="Email" required>
               </div>
-              <button type="submit" class="btn btn-primary" style="width:100%; font-size:1.05rem;"><i class="fas fa-user-plus"></i> Submit Registration</button>
+              <div class="form-group">
+                <input type="password" class="form-control" id="reg-pwd" placeholder="Password" required>
+              </div>
+              <button type="submit" class="btn btn-primary" style="width:100%;">Register</button>
             </form>
           </div>
         </div>
       `;
 
-      // Tabs triggers
       const tabLogin = document.getElementById("tab-login");
       const tabSignup = document.getElementById("tab-signup");
       const panelLogin = document.getElementById("panel-login");
@@ -2899,60 +3809,106 @@
 
       tabLogin?.addEventListener("click", () => {
         tabLogin.style.borderBottom = "3px solid var(--primary-blue)";
-        tabLogin.style.fontWeight = "700";
-        tabLogin.style.color = "var(--primary-blue)";
-        
-        tabSignup.style.borderBottom = "none";
-        tabSignup.style.fontWeight = "500";
-        tabSignup.style.color = "var(--text-secondary)";
-
         panelLogin.style.display = "block";
         panelSignup.style.display = "none";
       });
 
       tabSignup?.addEventListener("click", () => {
         tabSignup.style.borderBottom = "3px solid var(--primary-blue)";
-        tabSignup.style.fontWeight = "700";
-        tabSignup.style.color = "var(--primary-blue)";
-        
-        tabLogin.style.borderBottom = "none";
-        tabLogin.style.fontWeight = "500";
-        tabLogin.style.color = "var(--text-secondary)";
-
         panelSignup.style.display = "block";
         panelLogin.style.display = "none";
       });
 
-      // Login form submit
-      document.getElementById("form-login")?.addEventListener("submit", (e) => {
+      document.getElementById("form-login")?.addEventListener("submit", async (e) => {
         e.preventDefault();
-        state.isLoggedIn = true;
-        saveState();
-        showToast(`Welcome back, ${state.user.contactPerson}!`, "success");
-        window.location.hash = "#/dashboard";
+        const email = document.getElementById("login-email").value;
+        const password = document.getElementById("login-pwd").value;
+
+        try {
+          const data = await apiCall('/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ email, password })
+          });
+
+          const normalizedUser = {
+            ...data.user,
+            companyName: data.user.companyName || data.user.company_name || '',
+            contactPerson: data.user.contactPerson || data.user.company_name || email.split('@')[0],
+          };
+
+          localStorage.setItem("ci_token", data.token);
+          localStorage.setItem("ci_user", JSON.stringify(normalizedUser));
+          state.isLoggedIn = true;
+          state.user = normalizedUser;
+          saveState();
+          showToast("Login successful", "success");
+          window.location.hash = getRoleRoute(data.user?.role || normalizedUser.role);
+        } catch (err) {
+          showToast(err.message, "error");
+        }
       });
 
-      // Signup form submit
-      document.getElementById("form-signup")?.addEventListener("submit", (e) => {
+      document.getElementById("form-signup")?.addEventListener("submit", async (e) => {
         e.preventDefault();
-        state.user = {
-          companyName: document.getElementById("reg-company").value,
-          gstNumber: document.getElementById("reg-gst").value.toUpperCase(),
-          contactPerson: document.getElementById("reg-person").value,
-          phone: document.getElementById("reg-phone").value,
-          email: document.getElementById("reg-email").value,
-          address: document.getElementById("reg-address").value
-        };
-        state.isLoggedIn = true;
-        saveState();
-        showToast("Registration completed and logged in!", "success");
-        window.location.hash = "#/dashboard";
+        const company_name = document.getElementById("reg-company").value;
+        const full_name = document.getElementById("reg-name").value;
+        const gst_number = document.getElementById("reg-gst").value;
+        const address = document.getElementById("reg-address").value;
+        const email = document.getElementById("reg-email").value;
+        const password = document.getElementById("reg-pwd").value;
+
+        try {
+          const data = await apiCall('/auth/register', {
+            method: 'POST',
+            body: JSON.stringify({ company_name, full_name, gst_number, address, email, password })
+          });
+
+          const normalizedUser = {
+            ...data.user,
+            companyName: data.user.companyName || data.user.company_name || company_name,
+            contactPerson: data.user.contactPerson || full_name,
+          };
+
+          localStorage.setItem("ci_token", data.token);
+          localStorage.setItem("ci_user", JSON.stringify(normalizedUser));
+          state.isLoggedIn = true;
+          state.user = normalizedUser;
+          saveState();
+          showToast("Registration successful", "success");
+          window.location.hash = getRoleRoute(data.user?.role || normalizedUser.role);
+        } catch (err) {
+          showToast(err.message, "error");
+        }
       });
     }
   }
 
   // --- INITIALIZE SYSTEM BOOTSTRAP ---
-  const init = () => {
+  const init = async () => {
+    // Fetch live product catalog from backend
+    try {
+      const res = await apiCall('/products');
+      if (res && res.data) {
+        db.products = res.data.map(p => ({
+          id: p.id,
+          name: p.name,
+          sku: p.sku,
+          price: p.price,
+          stock: p.stock,
+          minOrder: p.min_order_qty,
+          grade: p.specs?.grade || p.material,
+          compatibility: p.compatibility || [],
+          image: p.image_url || 'assets/default-product.png',
+          stockByWarehouse: { "Faridabad Works": p.stock },
+          technicalSpecs: p.specs || {},
+          compliance: [],
+          leadTime: "14-21 Days"
+        }));
+      }
+    } catch (e) {
+      console.error("Failed to load live products from backend:", e);
+    }
+
     // Initial badge values
     updateBadges();
 
@@ -2961,9 +3917,6 @@
 
     // Autocomplete Search setup
     initSearchAutocomplete();
-
-    // Start live updates
-    startLiveStockSimulation();
 
     // Set up responsive mobile humburger toggle
     const toggleBtn = document.getElementById("mobile-menu-toggle");

@@ -98,8 +98,10 @@ header {
 
 .nav-container {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 1rem;
   max-width: 1400px;
   margin: 0 auto;
   padding: 1rem 2rem;
@@ -109,6 +111,7 @@ header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .logo-icon {
@@ -149,17 +152,23 @@ header {
 .nav-links {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  justify-content: space-evenly;
+  gap: clamp(0.55rem, 1vw, 1.15rem);
+  flex: 1 1 100%;
+  order: 4;
+  width: 100%;
+  margin: 0.75rem 0 0;
 }
 
 .nav-link {
   font-weight: 500;
   font-size: 0.95rem;
   color: var(--text-primary);
-  padding: 0.5rem 0.75rem;
+  padding: 0.5rem 0.7rem;
   border-radius: 6px;
   transition: var(--transition-smooth);
   position: relative;
+  white-space: nowrap;
 }
 
 .nav-link:hover, .nav-link.active {
@@ -272,6 +281,13 @@ header {
   display: flex;
   align-items: center;
   gap: 1rem;
+  margin-left: auto;
+  flex-shrink: 0;
+  order: 3;
+}
+
+.logo-section {
+  order: 2;
 }
 
 .action-btn {
@@ -2034,4 +2050,22 @@ footer {
   .footer-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* Admin Table Styles */
+.admin-table th, .admin-table td {
+  text-align: left;
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+.admin-table th {
+  font-weight: 600;
+  color: var(--text-secondary);
+  background-color: var(--light-gray);
+}
+
+.admin-table tr:hover {
+  background-color: #F8FAFC;
 }
