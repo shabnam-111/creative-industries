@@ -728,7 +728,19 @@ const TOKEN_KEY = "ci_token";
         rfqBtn.style.display = (role === 'client') ? '' : 'none';
       }
     } else {
-      container.innerHTML = `<div class="section" style="text-align:center;"><h2>Page Not Found</h2><a href="#/" class="btn btn-primary" style="margin-top:1.5rem;">Return Home</a></div>`;
+      container.innerHTML = `
+        <div class="section" style="text-align:center; padding: 8rem 2rem; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height: 60vh;">
+          <i class="fas fa-exclamation-triangle" style="font-size: 5rem; color: var(--primary-red); margin-bottom: 1.5rem;"></i>
+          <h2 style="font-size: 4rem; margin-bottom: 0.5rem; color: var(--primary-blue); line-height:1;">404</h2>
+          <h3 style="font-size: 1.75rem; margin-bottom: 1rem; color: var(--text-primary);">Oops! Page Not Found</h3>
+          <p style="color: var(--text-secondary); max-width: 500px; margin: 0 auto 2.5rem; font-size: 1.1rem; line-height:1.6;">
+            The component or page you are looking for might have been removed, had its name changed, or is temporarily unavailable.
+          </p>
+          <a href="#/" class="btn btn-primary" style="padding: 0.85rem 2.5rem; font-size: 1.1rem; box-shadow: 0 4px 14px rgba(37,99,235,0.3); border-radius: 50px;">
+            <i class="fas fa-home" style="margin-right: 0.5rem;"></i> Back to Home
+          </a>
+        </div>
+      `;
     }
   };
 
