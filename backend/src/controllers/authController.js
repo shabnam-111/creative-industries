@@ -15,7 +15,7 @@ export const register = async (req, res) => {
   try {
     const { email, password, company_name, full_name, gst_number, address, role = 'client', otp } = req.body;
     const result = await AuthService.register({ email, password, company_name, full_name, gst_number, address, role, otp });
-    res.status(201).json({ success: true, message: 'Registration successful', data: result });
+    res.status(201).json({ success: true, message: 'Registration successful', user: result.user, token: result.token });
   } catch (error) {
     console.error('Register Controller Error:', error);
     res.status(400).json({ success: false, message: error.message });
