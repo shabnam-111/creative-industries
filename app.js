@@ -126,15 +126,8 @@ const TOKEN_KEY = "ci_token";
         address: "Maruti Suzuki India Ltd., Faridabad Procurement Unit, Haryana"
       }
     ],
-    user: JSON.parse(localStorage.getItem("ci_user")) || {
-      companyName: "Automotive Solutions India",
-      gstNumber: "07AAAAS9876M1ZX",
-      contactPerson: "Rajesh Kumar",
-      phone: "+91 98123 45678",
-      email: "r.kumar@autosolutions.in",
-      address: "Plot 120, Sector 5, Sanjay Colony, Sector-23, Faridabad, Haryana - 121005"
-    },
-    isLoggedIn: JSON.parse(localStorage.getItem("ci_logged_in")) !== null ? JSON.parse(localStorage.getItem("ci_logged_in")) : true,
+    user: JSON.parse(localStorage.getItem("ci_user")) || null,
+    isLoggedIn: !!localStorage.getItem("ci_token"),
     liveStockInterval: null
   };
 
@@ -696,12 +689,11 @@ const TOKEN_KEY = "ci_token";
       const cleanPath = hash.split("?")[0];
 
       // Route Guard Logic
-      const authRequired = ['#/admin', '#/employee', '#/customer', '#/dashboard'];
+      const authRequired = ['#/admin', '#/employee', '#/customer', '#/dashboard', '#/checkout'];
       if (authRequired.includes(cleanPath)) {
         const token = localStorage.getItem(TOKEN_KEY);
         if (!token) {
-          showToast("Please log in to access this page", "error");
-          window.location.hash = "#/";
+          window.location.hash = "#/profile";
           return;
         }
 
@@ -3799,14 +3791,7 @@ const TOKEN_KEY = "ci_token";
         localStorage.removeItem("ci_token");
         localStorage.removeItem("ci_user");
         state.isLoggedIn = false;
-        state.user = {
-          companyName: "Automotive Solutions India",
-          gstNumber: "07AAAAS9876M1ZX",
-          contactPerson: "Rajesh Kumar",
-          phone: "+91 98123 45678",
-          email: "r.kumar@autosolutions.in",
-          address: "Plot 120, Sector 5, Sanjay Colony, Sector-23, Faridabad, Haryana - 121005"
-        };
+        state.user = null;
         saveState();
         renderProfile();
       });
