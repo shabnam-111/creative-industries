@@ -207,6 +207,11 @@ export class OrderService {
           const mappedStatus = formattedStatus === 'dispatched' ? 'in_transit' : 'delivered';
           await supabase.from('deliveries').update({ status: mappedStatus }).eq('id', del.id);
         }
+      } else if (['accepted', 'pending', 'rejected', 'processing'].includes(formattedStatus)) {
+        const { data: del, error: delErr } = await supabase.from('deliveries').select('id').eq('order_id', orderId).not('status', 'in', '(delivered,failed,cancelled)').maybeSingle();
+        if (del) {
+          await supabase.from('deliveries').update({ status: 'cancelled' }).eq('id', del.id);
+        }
       }
       updateData.status = formattedStatus;
     }
