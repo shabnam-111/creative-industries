@@ -22,12 +22,35 @@ const TOKEN_KEY = "ci_token";
   }
 
   async function apiCall(endpoint, options = {}) {
+    // Merge standard headers (like getAuthHeaders) with custom headers (if any)
+    const headers = { ...getAuthHeaders(), ...(options.headers || {}) };
+    
+    // Prevent overriding Content-Type if body is FormData (browser will set it automatically with boundary)
+    if (options.body instanceof FormData) {
+      delete headers['Content-Type'];
+    }
+
     const res = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
-      headers: getAuthHeaders()
+      headers
     });
+    
     const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'API Error');
+    
+    if (!res.ok) {
+      if (res.status === 401 && !endpoint.includes('/auth/')) {
+        // Auto logout and redirect to login
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem("ci_user");
+        state.isLoggedIn = false;
+        state.user = null;
+        window.location.hash = "#/profile";
+        // Stop execution of the caller by returning a Promise that never resolves
+        return new Promise(() => {}); 
+      }
+      throw new Error(data.message || 'API Error');
+    }
+    
     return data;
   }
 
