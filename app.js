@@ -671,7 +671,7 @@ const TOKEN_KEY = "ci_token";
       const cleanPath = hash.split("?")[0];
 
       // Route Guard Logic
-      const authRequired = ['/admin', '/employee', '/customer', '/dashboard', '/profile', '/cart', '/checkout'];
+      const authRequired = ['#/admin', '#/employee', '#/customer', '#/dashboard', '#/profile', '#/cart', '#/checkout'];
       if (authRequired.includes(cleanPath)) {
         const token = localStorage.getItem(TOKEN_KEY);
         if (!token) {
@@ -681,17 +681,17 @@ const TOKEN_KEY = "ci_token";
         }
 
         const role = state.user?.role;
-        if (cleanPath === '/admin' && role !== 'admin') {
+        if (cleanPath === '#/admin' && role !== 'admin') {
           showToast("Unauthorized access: Admins only", "error");
           window.location.hash = "#/";
           return;
         }
-        if (cleanPath === '/employee' && role !== 'employee') {
+        if (cleanPath === '#/employee' && role !== 'employee') {
           showToast("Unauthorized access: Employees only", "error");
           window.location.hash = "#/";
           return;
         }
-        if ((cleanPath === '/customer' || cleanPath === '/dashboard') && role !== 'customer' && role !== 'client') {
+        if ((cleanPath === '#/customer' || cleanPath === '#/dashboard') && role !== 'customer' && role !== 'client') {
           showToast("Unauthorized access: Customers only", "error");
           window.location.hash = "#/";
           return;
