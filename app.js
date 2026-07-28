@@ -1546,8 +1546,8 @@ const TOKEN_KEY = "ci_token";
         <h3 style="font-size:1.35rem; margin-bottom:1.5rem; border-bottom:1px solid var(--border-color); padding-bottom:0.75rem; color:var(--primary-blue)">
           <i class="fas fa-receipt"></i> Your Placed Purchase Orders (Live Tracking)
         </h3>
-        ${state.orders.filter(o => o.company === state.user.companyName).length === 0 ? `
-          <p style="color:var(--text-secondary); text-align:center; padding:1.5rem;">No purchase orders placed yet.</p>
+        ${(!state.user || state.orders.filter(o => o.company === (state.user.companyName || state.user.company_name)).length === 0) ? `
+          <p style="color:var(--text-secondary); text-align:center; padding:1.5rem;">${!state.user ? 'Log in to view your purchase orders.' : 'No purchase orders placed yet.'}</p>
         ` : `
           <div class="table-responsive" style="box-shadow:none; border:none; border-radius:0;">
             <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.9rem;">
@@ -1562,7 +1562,7 @@ const TOKEN_KEY = "ci_token";
                 </tr>
               </thead>
               <tbody>
-                ${state.orders.filter(o => o.company === state.user.companyName).map(o => `
+                ${state.orders.filter(o => o.company === (state.user.companyName || state.user.company_name)).map(o => `
                   <tr style="border-bottom:1px solid var(--border-color);">
                     <td style="padding:0.75rem 1rem; font-weight:700; color:var(--primary-blue);">${o.id}</td>
                     <td style="padding:0.75rem 1rem;">${o.date}</td>
