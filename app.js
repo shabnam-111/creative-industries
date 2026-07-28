@@ -49,10 +49,12 @@ const TOKEN_KEY = "ci_token";
     showToast(`Added to cart (Min order: ${minQty} pcs)`, "success");
 
     try {
-      await apiCall('/cart/add', {
-        method: 'POST',
-        body: JSON.stringify({ productId, quantity: newQty })
-      });
+      if (state.isLoggedIn) {
+        await apiCall('/cart/add', {
+          method: 'POST',
+          body: JSON.stringify({ productId, quantity: newQty })
+        });
+      }
     } catch (err) {
       console.error("Cart sync failed:", err.message);
     }
@@ -1595,7 +1597,7 @@ const TOKEN_KEY = "ci_token";
           saveState();
           renderCart();
           try {
-            await apiCall('/cart/add', { method: 'POST', body: JSON.stringify({ productId: item.productId, quantity: item.qty }) });
+            if (state.isLoggedIn) await apiCall('/cart/add', { method: 'POST', body: JSON.stringify({ productId: item.productId, quantity: item.qty }) });
           } catch (err) { console.error(err.message); }
         } else {
           showToast(`Cannot order less than MOQ (${prod.minOrder} pcs) for ${prod.name}`, "error");
@@ -1611,7 +1613,7 @@ const TOKEN_KEY = "ci_token";
         renderCart();
         try {
           const item = state.cart[idx];
-          await apiCall('/cart/add', { method: 'POST', body: JSON.stringify({ productId: item.productId, quantity: item.qty }) });
+          if (state.isLoggedIn) await apiCall('/cart/add', { method: 'POST', body: JSON.stringify({ productId: item.productId, quantity: item.qty }) });
         } catch (err) { console.error(err.message); }
       });
     });
@@ -1632,7 +1634,7 @@ const TOKEN_KEY = "ci_token";
         saveState();
         renderCart();
         try {
-          await apiCall('/cart/add', { method: 'POST', body: JSON.stringify({ productId: item.productId, quantity: item.qty }) });
+          if (state.isLoggedIn) await apiCall('/cart/add', { method: 'POST', body: JSON.stringify({ productId: item.productId, quantity: item.qty }) });
         } catch (err) { console.error(err.message); }
       });
     });
