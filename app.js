@@ -1931,19 +1931,25 @@ const TOKEN_KEY = "ci_token";
         });
         const order = res.data;
 
+        const realItems = order.items && order.items.length > 0 ? order.items : state.cart.map(item => {
+          const prod = db.products.find(p => p.id === item.productId);
+          return { productId: item.productId, name: prod?.name, qty: item.qty, price: prod?.price };
+        });
+
+        const realSubtotal = realItems.reduce((sum, i) => sum + ((i.price || 0) * (i.qty || i.quantity || 0)), 0);
+        const realGst = realSubtotal * 0.18;
+        const realShipping = realSubtotal > 100000 ? 0 : (order.total_amount ? 4500 : 3500); // Backend uses 4500, Frontend uses 3500
+
         state.orders.unshift({
-          id: order.order_number,
+          id: order.order_number || order.id,
           date: (order.created_at || new Date().toISOString()).split("T")[0],
           company: company,
           gst: gstVal,
-          items: state.cart.map(item => {
-            const prod = db.products.find(p => p.id === item.productId);
-            return { productId: item.productId, name: prod?.name, qty: item.qty, price: prod?.price };
-          }),
-          subtotal: subtotal,
-          gstAmount: gst,
-          shipping: shipping,
-          total: order.total_amount || total,
+          items: realItems,
+          subtotal: realSubtotal,
+          gstAmount: realGst,
+          shipping: realShipping,
+          total: order.total_amount || (realSubtotal + realGst + realShipping),
           payment: paymentVal,
           status: "Processing",
           address: address
@@ -2916,7 +2922,7 @@ const TOKEN_KEY = "ci_token";
     let y = 94 + offset;
     order.items.forEach(item => {
       const price = item.price || 0;
-      const qty = item.qty || 0;
+      const qty = item.qty || item.quantity || 0;
       doc.text(item.name || 'Unknown Item', 17, y);
       doc.text(`Rs. ${price.toLocaleString("en-IN")}`, 110, y);
       doc.text(`${qty}`, 142, y);
@@ -2931,8 +2937,8 @@ const TOKEN_KEY = "ci_token";
     doc.text("Financial Breakdown Details:", 15, y);
     doc.setFont("Helvetica", "normal");
 
-    const calculatedSubtotal = order.subtotal || order.items.reduce((sum, item) => sum + ((item.price || 0) * (item.qty || 0)), 0);
-    const calculatedGst = order.gstAmount || calculatedSubtotal * 0.18;
+    const calculatedSubtotal = order.subtotal || order.items.reduce((sum, item) => sum + ((item.price || 0) * (item.qty || item.quantity || 0)), 0);
+    const calculatedGst = order.gstAmount !== undefined ? order.gstAmount : calculatedSubtotal * 0.18;
     const calculatedShipping = order.shipping !== undefined ? order.shipping : (calculatedSubtotal > 100000 ? 0 : 4500);
     const calculatedTotal = order.total || (calculatedSubtotal + calculatedGst + calculatedShipping);
 
