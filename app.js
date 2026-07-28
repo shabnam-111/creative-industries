@@ -671,7 +671,7 @@ const TOKEN_KEY = "ci_token";
       const cleanPath = hash.split("?")[0];
 
       // Route Guard Logic
-      const authRequired = ['#/admin', '#/employee', '#/customer', '#/dashboard', '#/profile', '#/cart', '#/checkout'];
+      const authRequired = ['#/admin', '#/employee', '#/customer', '#/dashboard'];
       if (authRequired.includes(cleanPath)) {
         const token = localStorage.getItem(TOKEN_KEY);
         if (!token) {
