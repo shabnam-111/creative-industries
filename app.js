@@ -2110,13 +2110,6 @@ const TOKEN_KEY = "ci_token";
         )
         .map(o => {
           let effStatus = o.status;
-          if (o.deliveries) {
-            const del = Array.isArray(o.deliveries) ? o.deliveries[0] : o.deliveries;
-            if (del) {
-              if (del.status === 'in_transit') effStatus = 'dispatched';
-              else if (del.status === 'delivered') effStatus = 'delivered';
-            }
-          }
 
           return {
           id: o.order_number,
@@ -3305,8 +3298,6 @@ const TOKEN_KEY = "ci_token";
         const encodedDelivery = deliveryData ? encodeURIComponent(JSON.stringify(deliveryData)) : '';
 
         let effectiveStatus = o.status;
-        if (dStatus === 'in_transit') effectiveStatus = 'dispatched';
-        else if (dStatus === 'delivered') effectiveStatus = 'delivered';
 
         return `
         <tr data-id="${o.id}" data-order-number="${o.order_number}" data-destination="${(o.users?.customers?.shipping_address || o.users?.customers?.address || '').replace(/"/g, '&quot;')}" data-delivery="${encodedDelivery}" style="border-bottom:1px solid #eee;">
