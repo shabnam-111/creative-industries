@@ -22,6 +22,7 @@ const employeeController = {
           vehicles(vehicle_number)
         `)
         .eq('employee_id', req.user.id)
+        .not('status', 'in', '(delivered,failed,cancelled)')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
