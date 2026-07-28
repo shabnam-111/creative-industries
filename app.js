@@ -4064,7 +4064,9 @@ const TOKEN_KEY = "ci_token";
   const init = async () => {
     // Fetch live product catalog from backend
     try {
-      const res = await apiCall('/products');
+      const fetchPromise = apiCall('/products');
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout loading products')), 3500));
+      const res = await Promise.race([fetchPromise, timeoutPromise]);
       if (res && res.data) {
         db.products = res.data.map(p => ({
           id: p.id,
