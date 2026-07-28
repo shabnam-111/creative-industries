@@ -2149,6 +2149,9 @@ const TOKEN_KEY = "ci_token";
       const isRejected = order.status === 'rejected';
       const currentStatusIdx = statusFlow.indexOf(order.status);
 
+      const statusLabels = { pending: "Order Received", accepted: "Processing", dispatched: "Dispatched", delivered: "Delivered", rejected: "Rejected" };
+      const displayStatus = statusLabels[order.status] || order.status;
+
       let stepsHtml = "";
       if (isRejected) {
         stepsHtml = `
@@ -2161,7 +2164,7 @@ const TOKEN_KEY = "ci_token";
           </div>
         `;
       } else {
-        const labels = { pending: "Order Received", accepted: "Processing", dispatched: "Dispatched", delivered: "Delivered" };
+        const labels = statusLabels;
         statusFlow.forEach((status, idx) => {
           let stepClass = "";
           let iconHtml = '<i class="fas fa-circle" style="font-size:0.5rem; color:var(--text-secondary)"></i>';
@@ -2203,7 +2206,7 @@ const TOKEN_KEY = "ci_token";
             </div>
             <div style="text-align:right;">
               <span style="font-size:0.8rem; text-transform:uppercase; font-weight:700; color:var(--text-secondary)">Current Status</span>
-              <h3 style="font-size:1.1rem; color:${isRejected ? '#D62828' : '#15803D'}; text-transform:capitalize;">${order.status}</h3>
+              <h3 style="font-size:1.1rem; color:${isRejected ? '#D62828' : '#15803D'}; text-transform:capitalize;">${displayStatus}</h3>
             </div>
           </div>
 
