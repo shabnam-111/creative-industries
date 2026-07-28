@@ -3309,7 +3309,7 @@ const TOKEN_KEY = "ci_token";
         else if (dStatus === 'delivered') effectiveStatus = 'delivered';
 
         return `
-        <tr data-id="${o.id}" data-order-number="${o.order_number}" data-destination="${o.users?.customers?.shipping_address || ''}" data-delivery="${encodedDelivery}" style="border-bottom:1px solid #eee;">
+        <tr data-id="${o.id}" data-order-number="${o.order_number}" data-destination="${(o.users?.customers?.shipping_address || o.users?.customers?.address || '').replace(/"/g, '&quot;')}" data-delivery="${encodedDelivery}" style="border-bottom:1px solid #eee;">
           <td style="padding:12px 10px; vertical-align:middle; text-align:left;">${o.order_number}</td>
           <td style="padding:12px 10px; vertical-align:middle; text-align:left;">${o.users?.customers?.company_name || o.users?.email || '—'}</td>
           <td style="padding:12px 10px; vertical-align:middle; text-align:left;">₹${o.total_amount}</td>

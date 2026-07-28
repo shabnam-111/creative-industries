@@ -41,7 +41,7 @@ const adminController = {
   const { status } = req.query;
   let query = supabase
     .from('orders')
-    .select('*, users(email, customers(company_name, shipping_address)), deliveries(id, status, expected_delivery_time, employee_id, vehicle_id, pickup_location, destination, users(full_name), vehicles(vehicle_number))')
+    .select('*, users(email, customers(company_name, shipping_address, address)), deliveries(id, status, expected_delivery_time, employee_id, vehicle_id, pickup_location, destination, users(full_name), vehicles(vehicle_number))')
     .order('created_at', { ascending: false });
 
   if (status) query = query.eq('status', status);
