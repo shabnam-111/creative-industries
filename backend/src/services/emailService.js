@@ -245,4 +245,41 @@ export class EmailService {
       console.error('❌ Failed to send password reset email:', err.message);
     }
   }
+
+  /**
+   * Sends an OTP for delivery verification.
+   * @param {string} userEmail - Destination customer email address.
+   * @param {string} otp - The 6-digit OTP code.
+   * @param {string} orderNumber - The order number for reference.
+   */
+  static async sendDeliveryOTPEmail(userEmail, otp, orderNumber) {
+    if (!EMAIL_USER || !EMAIL_PASS) return;
+
+    const mailOptions = {
+      from: EMAIL_FROM,
+      to: userEmail,
+      subject: `Delivery Verification Code for Order #${orderNumber}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+          <h2 style="color: #0B3D91; text-align: center;">Delivery Verification</h2>
+          <p>Hello,</p>
+          <p>Your delivery for <strong>Order #${orderNumber}</strong> has arrived! Please provide the following 6-digit secure code to our delivery executive to verify and accept your delivery:</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <span style="display: inline-block; font-size: 28px; font-weight: bold; letter-spacing: 5px; color: #333; background: #f4f4f4; padding: 15px 30px; border-radius: 5px; border: 1px dashed #ccc;">
+              ${otp}
+            </span>
+          </div>
+          <p style="color: #666; font-size: 0.9em; text-align: center;">This code will expire in 10 minutes.</p>
+          <p>Thank you for choosing Creative Industries.</p>
+        </div>
+      `
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`📧 Delivery OTP email dispatched to ${userEmail} for Order #${orderNumber}`);
+    } catch (err) {
+      console.error('❌ Failed to send delivery OTP email:', err.message);
+    }
+  }
 }

@@ -521,6 +521,16 @@ const TOKEN_KEY = "ci_token";
             <i class="fas fa-phone"></i> Call Customer
           </button>
         </div>
+        
+        <div id="otp-section-${delivery.id}" style="margin-top: 1.5rem; padding: 1.25rem; border: 1px solid var(--border-color); border-radius: var(--border-radius-md); background: #f9fafb;">
+          <h4 style="margin-bottom:0.25rem; color:var(--primary-blue);"><i class="fas fa-shield-alt"></i> Verify Delivery</h4>
+          <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">To mark this order as delivered, generate and verify the secure delivery OTP.</p>
+          <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap:wrap;">
+             <button class="btn btn-primary btn-send-otp" data-id="${delivery.id}"><i class="fas fa-paper-plane"></i> Send Delivery OTP</button>
+             <input type="text" id="otp-input-${delivery.id}" placeholder="Enter 6-digit OTP" class="form-control" style="width: 160px; display: none;" />
+             <button class="btn btn-success btn-verify-otp" data-id="${delivery.id}" style="display: none; background:#10B981; color:#fff;"><i class="fas fa-check-circle"></i> Verify & Mark Delivered</button>
+          </div>
+        </div>
       </div>
     `;
 
@@ -532,6 +542,11 @@ const TOKEN_KEY = "ci_token";
           return;
         }
         if (status === 'cancelled' && !confirm("Cancelling requires admin approval. Send request?")) return;
+        if (status === 'delivered') {
+          showToast("Please use the Verify Delivery section below to mark as delivered.", "info");
+          document.getElementById(`otp-section-${delivery.id}`).scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
 
         try {
           await apiCall(`/employee/deliveries/${delivery.id}/status`, {
@@ -563,6 +578,59 @@ const TOKEN_KEY = "ci_token";
           showToast("Customer phone not available", "error");
         }
       });
+    });
+
+    panel.querySelector(".btn-send-otp")?.addEventListener("click", async (e) => {
+      const btn = e.target.closest('button');
+      const id = btn.getAttribute("data-id");
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+      btn.disabled = true;
+
+      try {
+        const res = await apiCall(`/employee/deliveries/${id}/send-otp`, { method: 'POST' });
+        showToast(res.message || "OTP Sent successfully!", "success");
+        btn.innerHTML = '<i class="fas fa-redo"></i> Resend OTP';
+        btn.disabled = false;
+        
+        document.getElementById(`otp-input-${id}`).style.display = 'block';
+        panel.querySelector(".btn-verify-otp").style.display = 'block';
+      } catch (err) {
+        showToast(err.message || "Failed to send OTP", "error");
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      }
+    });
+
+    panel.querySelector(".btn-verify-otp")?.addEventListener("click", async (e) => {
+      const btn = e.target.closest('button');
+      const id = btn.getAttribute("data-id");
+      const otpInput = document.getElementById(`otp-input-${id}`);
+      const otp = otpInput.value.trim();
+
+      if (!otp || otp.length !== 6) {
+        showToast("Please enter a valid 6-digit OTP", "error");
+        return;
+      }
+
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
+      btn.disabled = true;
+
+      try {
+        await apiCall(`/employee/deliveries/${id}/status`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'delivered', otp })
+        });
+        delivery.status = 'delivered';
+        showToast(`Delivery marked as Delivered!`, "success");
+        stopGPS();
+        renderDeliveryManagePanel(delivery);
+      } catch (err) {
+        showToast(err.message || "Failed to verify OTP and update status", "error");
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      }
     });
   }
 
