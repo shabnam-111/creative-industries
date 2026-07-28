@@ -61,7 +61,11 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start listening
-app.listen(PORT, () => {
-  console.log(`🚀 Server is running on http://localhost:${PORT}`);
-});
+// Start listening (only if not running in Vercel serverless environment)
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`🚀 Server is running on http://localhost:${PORT}`);
+  });
+}
+
+export default app;
