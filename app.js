@@ -668,8 +668,37 @@ const TOKEN_KEY = "ci_token";
     }
 
     if (matchedRenderer) {
-      // Set active link in header based on hash
       const cleanPath = hash.split("?")[0];
+
+      // Route Guard Logic
+      const authRequired = ['/admin', '/employee', '/customer', '/dashboard', '/profile', '/cart', '/checkout'];
+      if (authRequired.includes(cleanPath)) {
+        const token = localStorage.getItem(TOKEN_KEY);
+        if (!token) {
+          showToast("Please log in to access this page", "error");
+          window.location.hash = "#/";
+          return;
+        }
+
+        const role = state.user?.role;
+        if (cleanPath === '/admin' && role !== 'admin') {
+          showToast("Unauthorized access: Admins only", "error");
+          window.location.hash = "#/";
+          return;
+        }
+        if (cleanPath === '/employee' && role !== 'employee') {
+          showToast("Unauthorized access: Employees only", "error");
+          window.location.hash = "#/";
+          return;
+        }
+        if ((cleanPath === '/customer' || cleanPath === '/dashboard') && role !== 'customer' && role !== 'client') {
+          showToast("Unauthorized access: Customers only", "error");
+          window.location.hash = "#/";
+          return;
+        }
+      }
+
+      // Set active link in header based on hash
       const matchingLink = document.querySelector(`.nav-link[href="${cleanPath}"]`);
       if (matchingLink) matchingLink.classList.add("active");
 
