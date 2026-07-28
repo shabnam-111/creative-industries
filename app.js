@@ -3990,19 +3990,22 @@ const TOKEN_KEY = "ci_token";
             body: JSON.stringify({ ...tempRegData, otp })
           });
 
+          const user = data.user || data.data?.user;
+          const token = data.token || data.data?.token;
+
           const normalizedUser = {
-            ...data.user,
-            companyName: data.user.companyName || data.user.company_name || tempRegData.company_name,
-            contactPerson: data.user.contactPerson || tempRegData.full_name,
+            ...user,
+            companyName: user?.companyName || user?.company_name || tempRegData.company_name,
+            contactPerson: user?.contactPerson || tempRegData.full_name,
           };
 
-          localStorage.setItem("ci_token", data.token);
+          localStorage.setItem("ci_token", token);
           localStorage.setItem("ci_user", JSON.stringify(normalizedUser));
           state.isLoggedIn = true;
           state.user = normalizedUser;
           saveState();
           showToast("Registration successful", "success");
-          window.location.hash = getRoleRoute(data.user?.role || normalizedUser.role);
+          window.location.hash = getRoleRoute(user?.role || normalizedUser.role);
         } catch (err) {
           showToast(err.message, "error");
         }
