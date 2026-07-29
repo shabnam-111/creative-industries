@@ -754,7 +754,16 @@ const TOKEN_KEY = "ci_token";
           return;
         }
 
-        const role = state.user?.role;
+        let role = state.user?.role || state.user?.user?.role;
+        if (!role) {
+          role = 'client';
+          if (state.user) {
+            state.user.role = role;
+            localStorage.setItem("ci_user", JSON.stringify(state.user));
+          }
+        }
+        role = role.toLowerCase();
+
         if (cleanPath === '#/admin' && role !== 'admin') {
           showToast("Unauthorized access: Admins only", "error");
           window.location.hash = "#/";
