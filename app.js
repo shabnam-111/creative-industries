@@ -681,7 +681,16 @@ const TOKEN_KEY = "ci_token";
       activeMapInterval = null;
     }
 
-    container.innerHTML = '<div id="leaflet-map" style="height:300px; width:100%; border-radius:var(--border-radius); z-index:1;"></div>';
+    container.innerHTML = `
+      <div style="position:relative; width:100%; height:300px; border-radius:var(--border-radius); overflow:hidden;">
+        <div id="leaflet-map" style="height:100%; width:100%; z-index:1;"></div>
+        <div id="map-overlay-msg" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:1000; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.85); flex-direction:column; text-align:center; padding:1rem;">
+          <i class="fas fa-satellite-dish fa-fade" style="font-size:2.5rem; color:var(--text-secondary); margin-bottom:1rem;"></i>
+          <h4 style="color:var(--dark-gray); margin:0;">Waiting for GPS signal...</h4>
+          <p style="color:var(--text-secondary); font-size:0.85rem; margin-top:0.5rem;">The delivery partner has not yet started their GPS tracking or the signal is lost.</p>
+        </div>
+      </div>
+    `;
     
     const map = L.map('leaflet-map').setView([28.6139, 77.2090], 12); // Default Delhi
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -695,6 +704,9 @@ const TOKEN_KEY = "ci_token";
       try {
         const res = await apiCall(endpoint);
         if (res.success && res.data && res.data.length > 0) {
+          const overlayEl = document.getElementById('map-overlay-msg');
+          if (overlayEl) overlayEl.style.display = 'none';
+
           const latlngs = res.data.map(p => [p.latitude, p.longitude]);
           polyline.setLatLngs(latlngs);
           
