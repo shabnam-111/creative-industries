@@ -129,7 +129,7 @@ export class OrderService {
   static async getUserOrders(userId) {
     const { data, error } = await supabase
       .from('orders')
-      .select('*, deliveries(status)')
+      .select('*, deliveries(status, expected_delivery_time, users(full_name), vehicles(vehicle_number))')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 

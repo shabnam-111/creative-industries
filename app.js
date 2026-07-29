@@ -2118,6 +2118,7 @@ const TOKEN_KEY = "ci_token";
           address: state.user.address,
           payment: o.remarks || 'Net 30',
           status: effStatus,
+          deliveries: o.deliveries || [],
           items: (o.items || []).map(i => ({
             productId: i.product_id || i.productId,
             name: i.name,
@@ -2197,6 +2198,24 @@ const TOKEN_KEY = "ci_token";
         });
       }
 
+      let deliveryHtml = "";
+      if (['dispatched', 'delivered'].includes(order.status) && order.deliveries && order.deliveries.length > 0) {
+        const del = order.deliveries[0];
+        const delName = del.users?.full_name || "Assigned Driver";
+        const delVehicle = del.vehicles?.vehicle_number || "TBD";
+        const etaDate = del.expected_delivery_time ? new Date(del.expected_delivery_time).toLocaleString("en-IN", { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : "TBD";
+        deliveryHtml = `
+          <div style="margin-top: 1rem; padding: 1rem; background-color: var(--accent-light); border-radius: var(--border-radius); border: 1px solid #cce5ff;">
+            <h4 style="color: var(--primary-blue); margin-bottom: 0.5rem; font-size: 0.95rem;"><i class="fas fa-truck"></i> Delivery Details</h4>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.85rem; color: var(--text-primary);">
+              <div><strong style="color:var(--text-secondary)">Driver Name:</strong><br>${delName}</div>
+              <div><strong style="color:var(--text-secondary)">Vehicle Number:</strong><br>${delVehicle}</div>
+              <div style="grid-column: span 2;"><strong style="color:var(--text-secondary)">Expected Delivery (ETA):</strong><br>${etaDate}</div>
+            </div>
+          </div>
+        `;
+      }
+
       searchResultsHtml += `
         <div style="border:1px solid var(--border-color); border-radius:var(--border-radius-lg); padding:2rem; margin-bottom:2rem; background-color:var(--white); box-shadow:var(--shadow-sm);">
           <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-color); padding-bottom:1rem; margin-bottom:1.5rem; flex-wrap:wrap; gap:0.5rem;">
@@ -2214,6 +2233,7 @@ const TOKEN_KEY = "ci_token";
             <strong>Consigned To:</strong> ${order.company}<br>
             <strong>Destination Address:</strong> ${order.address}<br>
             <strong>Repayment Plan:</strong> ${order.payment}
+            ${deliveryHtml}
           </div>
 
           <div class="timeline">
