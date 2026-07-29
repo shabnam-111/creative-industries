@@ -405,7 +405,6 @@ const TOKEN_KEY = "ci_token";
         <h1 class="section-title">Employee Dashboard</h1>
         <div style="display:flex; gap:1rem; margin-bottom:2rem; flex-wrap:wrap;">
           <button id="btn-assigned-deliveries" class="btn btn-primary">Manage Deliveries</button>
-          <button id="btn-start-gps" class="btn btn-primary">Start GPS Tracking</button>
         </div>
         <div id="employee-content" style="background:var(--white); padding:2rem; border-radius:var(--border-radius-lg);">
           <p>Select an option above.</p>
@@ -413,20 +412,6 @@ const TOKEN_KEY = "ci_token";
       </div>
     `;
     document.getElementById("btn-assigned-deliveries").addEventListener("click", () => viewAssignedDeliveries());
-    document.getElementById("btn-start-gps").addEventListener("click", () => {
-      if (!gpsActiveDeliveryId) {
-        document.getElementById("employee-content").innerHTML = `
-          <div style="text-align:center; padding:3rem; background:var(--white); border:1px solid var(--border-color); border-radius:var(--border-radius-lg);">
-            <i class="fas fa-location-slash" style="font-size:3rem; color:var(--text-secondary); margin-bottom:1rem;"></i>
-            <h3 style="color:var(--dark-gray);">No Active Delivery</h3>
-            <p style="color:var(--text-secondary); margin-bottom:1.5rem;">You must start a delivery before GPS tracking can begin.</p>
-            <button class="btn btn-primary" onclick="document.getElementById('btn-assigned-deliveries').click()">Go to Manage Deliveries</button>
-          </div>
-        `;
-        return;
-      }
-      startGPS(gpsActiveDeliveryId);
-    });
   }
 
   async function viewAssignedDeliveries() {
