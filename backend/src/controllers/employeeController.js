@@ -38,8 +38,8 @@ const employeeController = {
       const { status, delayReason, vehicleIssue, remarks } = req.body;
 
       const validStatuses = [
-        'assigned', 'accepted', 'started', 'arrived_pickup', 'picked_up',
-        'in_transit', 'arrived_destination', 'delivered', 'failed', 'cancelled'
+        'pending', 'accepted', 'started', 'reached_pickup',
+        'in_transit', 'reached_destination', 'delivered', 'delivery_failed', 'cancelled'
       ];
       if (!status || !validStatuses.includes(status)) {
         return res.status(400).json({ success: false, message: `Invalid status: '${status}'` });
@@ -88,7 +88,7 @@ const employeeController = {
 
       const updateData = { status };
       if (status === 'started') updateData.started_at = new Date().toISOString();
-      if (['delivered', 'failed', 'cancelled'].includes(status)) {
+      if (['delivered', 'delivery_failed', 'cancelled'].includes(status)) {
         updateData.completed_at = new Date().toISOString();
       }
       if (delayReason !== undefined) updateData.delay_reason = delayReason;
@@ -106,8 +106,8 @@ const employeeController = {
       if (!data) return res.status(404).json({ success: false, message: `Delivery '${id}' not found` });
 
       // Sync the corresponding order status
-      if (['delivered', 'failed', 'cancelled'].includes(status)) {
-        await supabase.from('orders').update({ status }).eq('id', data.order_id);
+      if (['delivered', 'delivery_failed', 'cancelled'].includes(status)) {
+        await supabase.from('orders').update({ status: status === 'delivery_failed' ? 'cancelled' : status }).eq('id', data.order_id);
       } else if (status === 'in_transit') {
         await supabase.from('orders').update({ status: 'dispatched' }).eq('id', data.order_id);
       }

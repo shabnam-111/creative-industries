@@ -386,14 +386,14 @@ const TOKEN_KEY = "ci_token";
 
   // ===================== EMPLOYEE DASHBOARD =====================
   const DELIVERY_STATUSES = [
-    'assigned', 'accepted', 'started', 'arrived_pickup', 'picked_up',
-    'in_transit', 'arrived_destination', 'delivered', 'failed', 'cancelled'
+    'pending', 'accepted', 'started', 'reached_pickup',
+    'in_transit', 'reached_destination', 'delivered', 'delivery_failed', 'cancelled'
   ];
   const STATUS_LABELS = {
-    assigned: 'Assigned', accepted: 'Accept Delivery', started: 'Start Delivery',
-    arrived_pickup: 'Arrived at Pickup', picked_up: 'Picked Up Order',
-    in_transit: 'In Transit', arrived_destination: 'Arrived at Destination',
-    delivered: 'Delivered', failed: 'Delivery Failed', cancelled: 'Cancelled'
+    pending: 'Assigned', accepted: 'Accept Delivery', started: 'Start Delivery',
+    reached_pickup: 'Arrived at Pickup', in_transit: 'In Transit',
+    reached_destination: 'Arrived at Destination',
+    delivered: 'Delivered', delivery_failed: 'Delivery Failed', cancelled: 'Cancelled'
   };
   let gpsWatchId = null;
   let gpsActiveDeliveryId = null;
@@ -458,7 +458,7 @@ const TOKEN_KEY = "ci_token";
           <td>${d.destination || '—'}</td>
           <td>${d.expected_delivery_time ? new Date(d.expected_delivery_time).toLocaleString() : '—'}</td>
           <td>${d.vehicles?.vehicle_number || '—'}</td>
-          <td><span class="status-badge">${(d.status || 'assigned').replace('_', ' ')}</span></td>
+          <td><span class="status-badge">${(d.status || 'pending').replace('_', ' ')}</span></td>
           <td><button class="btn btn-primary btn-sm btn-manage-delivery">Manage</button></td>
         </tr>
       `).join("");
@@ -504,11 +504,11 @@ const TOKEN_KEY = "ci_token";
     panel.innerHTML = `
       <div class="dashboard-card" style="border:1px solid var(--border-color); border-radius:var(--border-radius-lg); padding:1.5rem;">
         <h3>Manage Delivery — ${delivery.orders?.order_number || delivery.id}</h3>
-        <p style="color:var(--text-secondary);">Current status: <strong style="text-transform:capitalize;">${(delivery.status || 'assigned').replace('_', ' ')}</strong></p>
+        <p style="color:var(--text-secondary);">Current status: <strong style="text-transform:capitalize;">${(delivery.status || 'pending').replace('_', ' ')}</strong></p>
         <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin:1rem 0;">
           ${DELIVERY_STATUSES.map((s, i) => `
             <button class="btn btn-sm btn-set-status" data-status="${s}"
-              style="background:${i <= currentIdx ? '#ccc' : (s === 'failed' || s === 'cancelled' ? '#D62828' : '#0B3D91')}; color:#fff;">
+              style="background:${i <= currentIdx ? '#ccc' : (s === 'delivery_failed' || s === 'cancelled' ? '#D62828' : '#0B3D91')}; color:#fff;">
               ${STATUS_LABELS[s]}
             </button>
           `).join("")}
@@ -560,7 +560,7 @@ const TOKEN_KEY = "ci_token";
             gpsActiveDeliveryId = delivery.id;
             startGPS(delivery.id);
           }
-          if (['delivered', 'failed', 'cancelled'].includes(status)) stopGPS();
+          if (['delivered', 'delivery_failed', 'cancelled'].includes(status)) stopGPS();
 
           renderDeliveryManagePanel(delivery);
         } catch (err) {
