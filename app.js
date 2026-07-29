@@ -1914,6 +1914,22 @@ const TOKEN_KEY = "ci_token";
       };
 
       try {
+        // First, explicitly save the updated profile to the backend
+        try {
+          await apiCall('/profile', {
+            method: 'PUT',
+            body: JSON.stringify({
+              companyName: company,
+              gstNumber: gstVal,
+              contactPerson: person,
+              phone: phone,
+              address: address
+            })
+          });
+        } catch (profileErr) {
+          console.warn("Could not save profile during checkout", profileErr);
+        }
+
         const res = await apiCall('/orders', {
           method: 'POST',
           body: JSON.stringify({ remarks: null })
