@@ -404,8 +404,7 @@ const TOKEN_KEY = "ci_token";
       <div class="section" style="max-width:1200px; margin:0 auto;">
         <h1 class="section-title">Employee Dashboard</h1>
         <div style="display:flex; gap:1rem; margin-bottom:2rem; flex-wrap:wrap;">
-          <button id="btn-assigned-deliveries" class="btn btn-primary">Assigned Deliveries</button>
-          <button id="btn-update-delivery" class="btn btn-primary">Update Delivery</button>
+          <button id="btn-assigned-deliveries" class="btn btn-primary">Manage Deliveries</button>
           <button id="btn-start-gps" class="btn btn-primary">Start GPS Tracking</button>
         </div>
         <div id="employee-content" style="background:var(--white); padding:2rem; border-radius:var(--border-radius-lg);">
@@ -414,7 +413,6 @@ const TOKEN_KEY = "ci_token";
       </div>
     `;
     document.getElementById("btn-assigned-deliveries").addEventListener("click", () => viewAssignedDeliveries());
-    document.getElementById("btn-update-delivery").addEventListener("click", () => viewAssignedDeliveries(true));
     document.getElementById("btn-start-gps").addEventListener("click", () => {
       if (!gpsActiveDeliveryId) {
         document.getElementById("employee-content").innerHTML = `
@@ -422,7 +420,7 @@ const TOKEN_KEY = "ci_token";
             <i class="fas fa-location-slash" style="font-size:3rem; color:var(--text-secondary); margin-bottom:1rem;"></i>
             <h3 style="color:var(--dark-gray);">No Active Delivery</h3>
             <p style="color:var(--text-secondary); margin-bottom:1.5rem;">You must start a delivery before GPS tracking can begin.</p>
-            <button class="btn btn-primary" onclick="document.getElementById('btn-assigned-deliveries').click()">Go to Assigned Deliveries</button>
+            <button class="btn btn-primary" onclick="document.getElementById('btn-assigned-deliveries').click()">Go to Manage Deliveries</button>
           </div>
         `;
         return;
@@ -431,7 +429,7 @@ const TOKEN_KEY = "ci_token";
     });
   }
 
-  async function viewAssignedDeliveries(focusUpdate = false) {
+  async function viewAssignedDeliveries() {
     const content = document.getElementById("employee-content");
     content.innerHTML = `<p>Loading assigned deliveries...</p>`;
     try {
@@ -439,11 +437,7 @@ const TOKEN_KEY = "ci_token";
       const deliveries = res.data || [];
 
       if (deliveries.length === 0) {
-        if (focusUpdate) {
-          content.innerHTML = `<h3>Update Delivery</h3><p>You don't have any active deliveries to update right now.</p>`;
-        } else {
-          content.innerHTML = `<h3>Assigned Deliveries</h3><p>No deliveries currently assigned to you.</p>`;
-        }
+        content.innerHTML = `<h3>Manage Deliveries</h3><p>No deliveries currently assigned to you.</p>`;
         return;
       }
 
@@ -464,7 +458,7 @@ const TOKEN_KEY = "ci_token";
       `).join("");
 
       content.innerHTML = `
-        <h3>Assigned Deliveries (${deliveries.length})</h3>
+        <h3>Manage Deliveries (${deliveries.length})</h3>
         <div style="overflow-x:auto;">
           <table class="admin-table" style="width:100%; border-collapse:collapse; margin-top:1rem;">
             <thead><tr><th>Order #</th><th>Customer</th><th>Pickup</th><th>Destination</th><th>Expected By</th><th>Vehicle</th><th>Status</th><th></th></tr></thead>
@@ -483,12 +477,7 @@ const TOKEN_KEY = "ci_token";
         });
       });
 
-      if (focusUpdate && deliveries[0]) {
-        // If clicking 'Update Delivery', hide the table and just show the first/active delivery's manage panel
-        content.querySelector('.admin-table').parentElement.style.display = 'none';
-        content.querySelector('h3').style.display = 'none';
-        renderDeliveryManagePanel(deliveries[0]);
-      }
+      // Removed focusUpdate logic
     } catch (e) {
       content.innerHTML = `<p style="color:#e74c3c;">Failed to load deliveries: ${e.message}</p>`;
     }
