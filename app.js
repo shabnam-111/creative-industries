@@ -1307,6 +1307,13 @@ const TOKEN_KEY = "ci_token";
 
           <!-- Actions -->
           <div style="display:flex; flex-direction:column; gap:1rem; border-top:1px solid var(--border-color); padding-top:1.5rem;">
+              <div style="display:flex; flex-direction:column; gap:0.5rem; margin-bottom:1.5rem;">
+                <label style="display:flex; align-items:center; gap:0.75rem; cursor:pointer; padding:1rem; border:1px solid var(--primary-color); border-radius:var(--border-radius); background:rgba(1,82,204,0.05);">
+                  <input type="radio" name="checkout-payment" value="Paytm" checked>
+                  <img src="https://logodownload.org/wp-content/uploads/2019/09/paytm-logo-2.png" alt="Paytm" style="height:24px;">
+                  <span style="font-weight:600; color:var(--primary-color);">Secure Payment via Paytm</span>
+                </label>
+              </div>
             <div style="display:flex; align-items:center; gap:1.5rem;">
               <span style="font-weight:600; font-size:0.95rem;">Order Qty:</span>
               <div class="qty-selector">
@@ -1980,72 +1987,102 @@ const TOKEN_KEY = "ci_token";
       const phone = document.getElementById("checkout-phone").value;
       const email = document.getElementById("checkout-email").value;
       const address = document.getElementById("checkout-address").value;
-      const paymentVal = document.querySelector('input[name="checkout-payment"]:checked').value;
+        const paymentVal = "Paytm";
 
-      state.user = {
-        companyName: company,
-        gstNumber: gstVal,
-        contactPerson: person,
-        phone: phone,
-        email: email,
-        address: address
-      };
+        state.user = {
+          companyName: company,
+          gstNumber: gstVal,
+          contactPerson: person,
+          phone: phone,
+          email: email,
+          address: address
+        };
 
-      try {
-        // First, explicitly save the updated profile to the backend
         try {
-          await apiCall('/profile', {
-            method: 'PUT',
+          // Explicitly save the updated profile to the backend
+          try {
+            await apiCall('/profile', {
+              method: 'PUT',
+              body: JSON.stringify({ companyName: company, gstNumber: gstVal, contactPerson: person, phone: phone, address: address })
+            });
+          } catch (profileErr) {
+            console.warn("Could not save profile during checkout", profileErr);
+          }
+
+          // We create the order first. We will assume the status stays "pending_payment" (handled in db by default or we pass it)
+          const res = await apiCall('/orders', {
+            method: 'POST',
+            body: JSON.stringify({ remarks: paymentVal })
+          });
+          const order = res.data;
+
+          const realItems = order.items && order.items.length > 0 ? order.items : state.cart.map(item => {
+            const prod = db.products.find(p => p.id === item.productId);
+            return { productId: item.productId, name: prod?.name, qty: item.qty, price: prod?.price };
+          });
+
+          const realSubtotal = realItems.reduce((sum, i) => sum + ((i.price || 0) * (i.qty || i.quantity || 0)), 0);
+          const realGst = realSubtotal * 0.18;
+          const realShipping = realSubtotal > 100000 ? 0 : (order.total_amount ? 4500 : 3500);
+          const orderTotal = order.total_amount || (realSubtotal + realGst + realShipping);
+
+          // Initiate Paytm Transaction
+          const paytmRes = await apiCall('/paytm/initiate', {
+            method: 'POST',
             body: JSON.stringify({
-              companyName: company,
-              gstNumber: gstVal,
-              contactPerson: person,
-              phone: phone,
-              address: address
+              orderId: order.id,
+              amount: orderTotal
             })
           });
-        } catch (profileErr) {
-          console.warn("Could not save profile during checkout", profileErr);
+
+          if (paytmRes.success) {
+            // Load Paytm JS dynamically if not loaded
+            if (!document.getElementById("paytm-checkout-script")) {
+              const script = document.createElement("script");
+              script.id = "paytm-checkout-script";
+              script.type = "application/javascript";
+              script.src = `https://${paytmRes.environment}/merchantpgpui/checkoutjs/merchants/${paytmRes.mid}.js`;
+              document.body.appendChild(script);
+            }
+
+            // Await script load and invoke Paytm
+            const checkPaytmReady = setInterval(() => {
+              if (window.Paytm && window.Paytm.CheckoutJS) {
+                clearInterval(checkPaytmReady);
+                
+                const config = {
+                  root: "",
+                  flow: "DEFAULT",
+                  data: {
+                    orderId: order.id,
+                    token: paytmRes.txnToken,
+                    tokenType: "TXN_TOKEN",
+                    amount: orderTotal.toString()
+                  },
+                  handler: {
+                    notifyMerchant: function(eventName, data) {
+                      console.log("Paytm Event:", eventName, data);
+                    }
+                  }
+                };
+
+                state.cart = []; // Empty cart
+                saveState();
+
+                window.Paytm.CheckoutJS.init(config).then(function onSuccess() {
+                  window.Paytm.CheckoutJS.invoke();
+                }).catch(function onError(error) {
+                  showToast("Paytm Initialization Failed", "error");
+                });
+              }
+            }, 500);
+          } else {
+            showToast("Failed to initiate Paytm: " + paytmRes.message, "error");
+          }
+        } catch (err) {
+          showToast(err.message || "Failed to place order", "error");
         }
-
-        const res = await apiCall('/orders', {
-          method: 'POST',
-          body: JSON.stringify({ remarks: null })
-        });
-        const order = res.data;
-
-        const realItems = order.items && order.items.length > 0 ? order.items : state.cart.map(item => {
-          const prod = db.products.find(p => p.id === item.productId);
-          return { productId: item.productId, name: prod?.name, qty: item.qty, price: prod?.price };
-        });
-
-        const realSubtotal = realItems.reduce((sum, i) => sum + ((i.price || 0) * (i.qty || i.quantity || 0)), 0);
-        const realGst = realSubtotal * 0.18;
-        const realShipping = realSubtotal > 100000 ? 0 : (order.total_amount ? 4500 : 3500); // Backend uses 4500, Frontend uses 3500
-
-        state.orders.unshift({
-          id: order.order_number || order.id,
-          date: (order.created_at || new Date().toISOString()).split("T")[0],
-          company: company,
-          gst: gstVal,
-          items: realItems,
-          subtotal: realSubtotal,
-          gstAmount: realGst,
-          shipping: realShipping,
-          total: order.total_amount || (realSubtotal + realGst + realShipping),
-          payment: paymentVal,
-          status: "Processing",
-          address: address
-        });
-
-        state.cart = [];
-        saveState();
-        showToast("Order placed successfully!", "success");
-        window.location.hash = `#/confirmation/${order.order_number}`;
-      } catch (err) {
-        showToast(err.message || "Failed to place order", "error");
-      }
-    });
+      });
 
     document.getElementById("checkout-person")?.addEventListener("blur", (e) => {
       const newVal = e.target.value.trim();

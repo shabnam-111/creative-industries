@@ -10,6 +10,7 @@ import profileRouter from './routes/profile.js';
 import authRouter from './routes/authRoutes.js';
 import cartRoutes from './routes/cartRoutes.js';
 import wishlistRoutes from './routes/wishlistRoutes.js';
+import paytmRoutes from './routes/paytmRoutes.js';
 import adminRouter from './routes/adminRoutes.js';
 import employeeRouter from './routes/employeeRoutes.js';
 
@@ -26,6 +27,7 @@ app.use(morgan('dev'));
 
 // Parse JSON request bodies
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/products', productRoutes);
@@ -36,6 +38,7 @@ app.use('/api/profile', profileRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/cart', cartRoutes);
 app.use('/api/wishlist', wishlistRoutes);
+app.use('/api/paytm', paytmRoutes);
 
 // Health/Status check endpoint
 app.get('/api/status', (req, res) => {
