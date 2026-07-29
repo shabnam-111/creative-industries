@@ -765,7 +765,7 @@ const TOKEN_KEY = "ci_token";
           window.location.hash = "#/";
           return;
         }
-        if ((cleanPath === '#/customer' || cleanPath === '#/dashboard') && role !== 'customer' && role !== 'client') {
+        if ((cleanPath === '#/customer' || cleanPath === '#/dashboard') && role !== 'customer' && role !== 'client' && role !== 'admin') {
           showToast("Unauthorized access: Customers only", "error");
           window.location.hash = "#/";
           return;
@@ -4115,6 +4115,7 @@ const TOKEN_KEY = "ci_token";
           const token = data.token || data.data?.token;
 
           const normalizedUser = {
+            role: 'client',
             ...user,
             companyName: user?.companyName || user?.company_name || tempRegData.company_name,
             contactPerson: user?.contactPerson || user?.full_name || tempRegData.full_name,
@@ -4128,7 +4129,7 @@ const TOKEN_KEY = "ci_token";
           state.user = normalizedUser;
           saveState();
           showToast("Registration successful", "success");
-          window.location.hash = getRoleRoute(user?.role || normalizedUser.role);
+          window.location.hash = getRoleRoute(normalizedUser.role);
         } catch (err) {
           showToast(err.message, "error");
         }
