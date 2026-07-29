@@ -2112,9 +2112,37 @@ const TOKEN_KEY = "ci_token";
   }
 
   // 9. ORDER CONFIRMATION VIEW
-  function renderConfirmation(params) {
+  async function renderConfirmation(params) {
     const orderId = params.id;
-    const order = state.orders.find(o => o.id === orderId);
+    let order = state.orders.find(o => o.id === orderId);
+    
+    // If we loaded the page directly on this URL, orders might not be fetched yet
+    if (!order && state.isLoggedIn) {
+      try {
+        const res = await apiCall('/orders');
+        state.orders = res.data.map(o => {
+          return {
+            id: o.order_number,
+            realId: o.id,
+            date: (o.created_at || new Date().toISOString()).split("T")[0],
+            gst: state.user.gstNumber || "N/A",
+            payment: o.payment_method || "Paytm",
+            total: Number(o.total_amount || 0),
+            status: o.status === 'pending_payment' ? 'Pending Payment' : o.status === 'pending' ? 'Processing' : o.status === 'dispatched' ? 'Dispatched' : o.status === 'delivered' ? 'Delivered' : o.status,
+            items: (o.order_items || []).map(i => ({
+              productId: i.product_id,
+              name: i.products?.name,
+              qty: i.quantity,
+              price: Number(i.price)
+            }))
+          };
+        });
+        order = state.orders.find(o => o.id === orderId || o.realId === orderId);
+      } catch (err) {
+        console.error("Failed to fetch order for confirmation:", err);
+      }
+    }
+
     const container = document.getElementById("app-container");
 
     if (!order) {
