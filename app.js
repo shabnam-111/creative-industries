@@ -2203,6 +2203,7 @@ const TOKEN_KEY = "ci_token";
 
           return {
           id: o.order_number,
+          realId: o.id,
           date: (o.created_at || new Date().toISOString()).split("T")[0],
           company: state.user.companyName,
           address: state.user.address,
@@ -2307,7 +2308,7 @@ const TOKEN_KEY = "ci_token";
           </div>
         `;
         if (order.status === 'dispatched') {
-          setTimeout(() => renderDeliveryMap(mapContainerId, `/orders/${order.id}/delivery-location`), 100);
+          setTimeout(() => renderDeliveryMap(mapContainerId, `/orders/${order.realId}/delivery-location`), 100);
         }
       }
 
