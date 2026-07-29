@@ -16,6 +16,17 @@ const paytmController = {
         return res.status(400).json({ success: false, message: 'Order ID and Amount are required' });
       }
 
+      // Mock Mode when no real key is configured
+      if (PAYTM_MERCHANT_KEY === 'YOUR_TEST_KEY') {
+        return res.json({
+          success: true,
+          txnToken: 'MOCK_TXN_TOKEN',
+          orderId: orderId,
+          mid: PAYTM_MID,
+          environment: PAYTM_ENVIRONMENT
+        });
+      }
+
       const paytmParams = {};
       paytmParams.body = {
         requestType: 'Payment',
@@ -71,6 +82,18 @@ const paytmController = {
     try {
       // Paytm posts data to this callback URL
       const paytmResponse = req.body;
+      
+      // Mock Mode
+      if (PAYTM_MERCHANT_KEY === 'YOUR_TEST_KEY' && paytmResponse.MOCK === 'true') {
+        const { error } = await supabase
+          .from('orders')
+          .update({ status: 'pending' }) // Move from pending_payment to pending (Order Received)
+          .eq('id', paytmResponse.ORDERID);
+
+        if (error) throw error;
+        return res.redirect(`/#/confirmation/${paytmResponse.ORDERID}`);
+      }
+
       const paytmChecksum = paytmResponse.CHECKSUMHASH;
       delete paytmResponse.CHECKSUMHASH;
 
@@ -81,7 +104,7 @@ const paytmController = {
           // Update order status in Supabase
           const { error } = await supabase
             .from('orders')
-            .update({ status: 'pending' }) // Move from pending_payment to pending (Order Received)
+            .update({ status: 'pending' })
             .eq('id', paytmResponse.ORDERID);
 
           if (error) throw error;

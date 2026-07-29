@@ -2020,46 +2020,68 @@ const TOKEN_KEY = "ci_token";
           });
 
           if (paytmRes.success) {
-            // Load Paytm JS dynamically if not loaded
-            if (!document.getElementById("paytm-checkout-script")) {
-              const script = document.createElement("script");
-              script.id = "paytm-checkout-script";
-              script.type = "application/javascript";
-              script.src = `https://${paytmRes.environment}/merchantpgpui/checkoutjs/merchants/${paytmRes.mid}.js`;
-              document.body.appendChild(script);
-            }
-
-            // Await script load and invoke Paytm
-            const checkPaytmReady = setInterval(() => {
-              if (window.Paytm && window.Paytm.CheckoutJS) {
-                clearInterval(checkPaytmReady);
-                
-                const config = {
-                  root: "",
-                  flow: "DEFAULT",
-                  data: {
-                    orderId: order.id,
-                    token: paytmRes.txnToken,
-                    tokenType: "TXN_TOKEN",
-                    amount: orderTotal.toString()
-                  },
-                  handler: {
-                    notifyMerchant: function(eventName, data) {
-                      console.log("Paytm Event:", eventName, data);
-                    }
-                  }
-                };
-
-                state.cart = []; // Empty cart
-                saveState();
-
-                window.Paytm.CheckoutJS.init(config).then(function onSuccess() {
-                  window.Paytm.CheckoutJS.invoke();
-                }).catch(function onError(error) {
-                  showToast("Paytm Initialization Failed", "error");
-                });
+            if (paytmRes.txnToken === 'MOCK_TXN_TOKEN') {
+              // Mock Paytm Modal for Test Environment Without Keys
+              const mockModal = document.createElement("div");
+              mockModal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; display:flex; align-items:center; justify-content:center;";
+              mockModal.innerHTML = `
+                <div style="background:var(--white); padding:2rem; border-radius:12px; text-align:center; max-width:400px; width:90%;">
+                  <img src="https://logodownload.org/wp-content/uploads/2019/09/paytm-logo-2.png" alt="Paytm" style="height:32px; margin-bottom:1rem;">
+                  <h3 style="margin-bottom:0.5rem;">Test Environment</h3>
+                  <p style="color:var(--text-secondary); margin-bottom:1.5rem;">No Paytm API keys found. This is a mock payment screen to simulate the flow.</p>
+                  <p style="font-size:1.5rem; font-weight:700; margin-bottom:2rem;">Pay ₹${orderTotal.toLocaleString("en-IN")}</p>
+                  <form method="POST" action="/api/paytm/callback">
+                    <input type="hidden" name="ORDERID" value="${order.id}">
+                    <input type="hidden" name="MOCK" value="true">
+                    <button type="submit" class="btn btn-primary" style="width:100%; font-size:1.1rem;">Simulate Successful Payment</button>
+                  </form>
+                  <button type="button" class="btn btn-outline" style="width:100%; margin-top:1rem;" onclick="this.closest('div').parentElement.remove(); window.location.hash = '#/confirmation/${order.id}?status=failed';">Cancel</button>
+                </div>
+              `;
+              document.body.appendChild(mockModal);
+              state.cart = [];
+              saveState();
+            } else {
+              // Real Paytm SDK Initialization
+              if (!document.getElementById("paytm-checkout-script")) {
+                const script = document.createElement("script");
+                script.id = "paytm-checkout-script";
+                script.type = "application/javascript";
+                script.src = `https://${paytmRes.environment}/merchantpgpui/checkoutjs/merchants/${paytmRes.mid}.js`;
+                document.body.appendChild(script);
               }
-            }, 500);
+
+              const checkPaytmReady = setInterval(() => {
+                if (window.Paytm && window.Paytm.CheckoutJS) {
+                  clearInterval(checkPaytmReady);
+                  
+                  const config = {
+                    root: "",
+                    flow: "DEFAULT",
+                    data: {
+                      orderId: order.id,
+                      token: paytmRes.txnToken,
+                      tokenType: "TXN_TOKEN",
+                      amount: orderTotal.toString()
+                    },
+                    handler: {
+                      notifyMerchant: function(eventName, data) {
+                        console.log("Paytm Event:", eventName, data);
+                      }
+                    }
+                  };
+
+                  state.cart = []; // Empty cart
+                  saveState();
+
+                  window.Paytm.CheckoutJS.init(config).then(function onSuccess() {
+                    window.Paytm.CheckoutJS.invoke();
+                  }).catch(function onError(error) {
+                    showToast("Paytm Initialization Failed", "error");
+                  });
+                }
+              }, 500);
+            }
           } else {
             showToast("Failed to initiate Paytm: " + paytmRes.message, "error");
           }
