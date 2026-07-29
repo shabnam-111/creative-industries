@@ -2080,6 +2080,21 @@ footer {
   .section {
     padding: 1.5rem 1rem;
   }
+
+  body, html {
+    overflow-x: hidden;
+    width: 100%;
+  }
+
+  .dashboard-layout {
+    padding: 1rem;
+    gap: 1rem;
+  }
+
+  .dashboard-content, .dashboard-sidebar {
+    padding: 1rem;
+    min-width: 0;
+  }
 }
 
 .table-responsive {
