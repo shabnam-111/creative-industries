@@ -18,4 +18,7 @@ clientRouter.get('/', verifyToken, OrderController.getUserOrders);
 // GET /api/orders/:id - Track details of a single order (Protected: Owner only)
 clientRouter.get('/:id', verifyToken, OrderController.getOrderById);
 
+// GET /api/orders/:id/delivery-location - Get live GPS of delivery
+clientRouter.get('/:id/delivery-location', verifyToken, OrderController.getDeliveryLocation);
+
 export default clientRouter;

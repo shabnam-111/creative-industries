@@ -1,6 +1,8 @@
 // src/controllers/orderController.js
 import { OrderService } from '../services/orderService.js';
 
+import { supabase } from '../config/supabase.js';
+
 export class OrderController {
   /**
    * POST /api/orders - Checkout user's cart and place a new order.
@@ -138,6 +140,43 @@ export class OrderController {
         success: false,
         message: error.message
       });
+    }
+  }
+
+  /**
+   * GET /api/orders/:id/delivery-location - Get live GPS of delivery
+   */
+  static async getDeliveryLocation(req, res) {
+    try {
+      const orderId = req.params.id;
+      const order = await OrderService.getOrderById(orderId);
+      
+      if (!order) {
+        return res.status(404).json({ success: false, message: 'Order not found' });
+      }
+      
+      if (order.user_id !== req.user.id && req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, message: 'Not authorized to view this order tracking' });
+      }
+      
+      // We need to fetch the active delivery for this order to get the deliveryId
+      const { data: delivery, error: deliveryErr } = await supabase
+        .from('deliveries')
+        .select('id')
+        .eq('order_id', orderId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (deliveryErr) throw deliveryErr;
+      if (!delivery) {
+        return res.status(404).json({ success: false, message: 'No delivery found for this order' });
+      }
+
+      const locations = await OrderService.getDeliveryLocation(delivery.id);
+      res.json({ success: true, data: locations });
+    } catch (error) {
+      res.status(400).json({ success: false, message: error.message });
     }
   }
 }

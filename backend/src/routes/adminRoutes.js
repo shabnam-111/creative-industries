@@ -23,5 +23,6 @@ router.get('/employees', verifyToken, isAdmin, adminController.getEmployeesList)
 router.get('/vehicles', verifyToken, isAdmin, adminController.getVehiclesList);
 router.post('/deliveries', verifyToken, isAdmin, adminController.assignDelivery);
 router.put('/deliveries/:id', verifyToken, isAdmin, adminController.reassignDelivery);
+router.get('/deliveries/:id/location', verifyToken, isEmployee, adminController.getDeliveryLocation);
 
 export default router;

@@ -406,6 +406,24 @@ const adminController = {
       console.error('Reassign Delivery Error:', error);
       res.status(500).json({ success: false, message: error.message });
     }
+  },
+
+  async getDeliveryLocation(req, res) {
+    try {
+      const { id } = req.params; // delivery id
+      
+      const { data, error } = await supabase
+        .from('employee_gps_logs')
+        .select('latitude, longitude, speed, timestamp')
+        .eq('delivery_id', id)
+        .order('timestamp', { ascending: true });
+        
+      if (error) throw error;
+      res.json({ success: true, data });
+    } catch (error) {
+      console.error('Admin Get Delivery Location Error:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
   }
 };
 

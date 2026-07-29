@@ -236,4 +236,18 @@ export class OrderService {
 
     return updatedOrder;
   }
+
+  /**
+   * Get the GPS history for a specific delivery.
+   */
+  static async getDeliveryLocation(deliveryId) {
+    const { data, error } = await supabase
+      .from('employee_gps_logs')
+      .select('latitude, longitude, speed, timestamp')
+      .eq('delivery_id', deliveryId)
+      .order('timestamp', { ascending: true });
+    
+    if (error) throw error;
+    return data;
+  }
 }

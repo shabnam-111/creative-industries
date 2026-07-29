@@ -667,6 +667,61 @@ const TOKEN_KEY = "ci_token";
       showToast("GPS tracking stopped", "info");
     }
   }
+
+  // --- LEAFLET MAP INTEGRATION ---
+  let activeMapInterval = null;
+  function renderDeliveryMap(containerId, endpoint) {
+    const container = document.getElementById(containerId);
+    if (!container || !window.L) return;
+
+    if (activeMapInterval) {
+      clearInterval(activeMapInterval);
+      activeMapInterval = null;
+    }
+
+    container.innerHTML = '<div id="leaflet-map" style="height:300px; width:100%; border-radius:var(--border-radius); z-index:1;"></div>';
+    
+    const map = L.map('leaflet-map').setView([28.6139, 77.2090], 12); // Default Delhi
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    let marker = null;
+    let polyline = L.polyline([], {color: 'blue'}).addTo(map);
+
+    const updateMap = async () => {
+      try {
+        const res = await apiCall(endpoint);
+        if (res.success && res.data && res.data.length > 0) {
+          const latlngs = res.data.map(p => [p.latitude, p.longitude]);
+          polyline.setLatLngs(latlngs);
+          
+          const latest = latlngs[latlngs.length - 1];
+          if (!marker) {
+            marker = L.marker(latest).addTo(map);
+            map.fitBounds(polyline.getBounds());
+          } else {
+            marker.setLatLng(latest);
+          }
+        }
+      } catch (err) {
+        console.error("Map update failed:", err);
+      }
+    };
+
+    updateMap();
+    activeMapInterval = setInterval(updateMap, 10000); // Update every 10 seconds
+    
+    // Clear interval when navigating away
+    const origHashChange = window.onhashchange;
+    window.onhashchange = (e) => {
+      if (activeMapInterval) {
+        clearInterval(activeMapInterval);
+        activeMapInterval = null;
+      }
+      if (origHashChange) origHashChange(e);
+    };
+  }
   function renderCustomerDashboard() {
     const container = document.getElementById("app-container");
     container.innerHTML = `
@@ -2218,6 +2273,7 @@ const TOKEN_KEY = "ci_token";
         const delName = del.users?.full_name || "Assigned Driver";
         const delVehicle = del.vehicles?.vehicle_number || "TBD";
         const etaDate = del.expected_delivery_time ? new Date(del.expected_delivery_time).toLocaleString("en-IN", { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : "TBD";
+        const mapContainerId = `map-container-${order.id}`;
         deliveryHtml = `
           <div style="margin-top: 1rem; padding: 1rem; background-color: var(--accent-light); border-radius: var(--border-radius); border: 1px solid #cce5ff;">
             <h4 style="color: var(--primary-blue); margin-bottom: 0.5rem; font-size: 0.95rem;"><i class="fas fa-truck"></i> Delivery Details</h4>
@@ -2226,8 +2282,12 @@ const TOKEN_KEY = "ci_token";
               <div><strong style="color:var(--text-secondary)">Vehicle Number:</strong><br>${delVehicle}</div>
               <div style="grid-column: span 2;"><strong style="color:var(--text-secondary)">Expected Delivery (ETA):</strong><br>${etaDate}</div>
             </div>
+            ${order.status === 'dispatched' ? `<div id="${mapContainerId}" style="margin-top: 1rem;"></div>` : ''}
           </div>
         `;
+        if (order.status === 'dispatched') {
+          setTimeout(() => renderDeliveryMap(mapContainerId, `/orders/${order.id}/delivery-location`), 100);
+        }
       }
 
       searchResultsHtml += `
@@ -3336,6 +3396,11 @@ const TOKEN_KEY = "ci_token";
 
         let effectiveStatus = o.status;
 
+        let mapBtnHtml = '';
+        if (dId && ['in_transit', 'started'].includes(dStatus)) {
+          mapBtnHtml = `<button class="btn btn-sm btn-view-map" data-del-id="${dId}" data-order="${o.order_number}" style="margin-left:0.3rem; background:#10B981; color:#fff; border:none;"><i class="fas fa-map-marked-alt"></i> Map</button>`;
+        }
+
         return `
         <tr data-id="${o.id}" data-order-number="${o.order_number}" data-destination="${(o.users?.customers?.shipping_address || o.users?.customers?.address || '').replace(/"/g, '&quot;')}" data-delivery="${encodedDelivery}" style="border-bottom:1px solid #eee;">
           <td style="padding:12px 10px; vertical-align:middle; text-align:left;">${o.order_number}</td>
@@ -3351,6 +3416,7 @@ const TOKEN_KEY = "ci_token";
           <td style="padding:12px 10px; vertical-align:middle; text-align:left; white-space:nowrap;">
             <button class="btn btn-primary btn-sm btn-update-order">Update</button>
             ${o.status === 'accepted' ? `<button class="btn btn-sm btn-assign-delivery" style="margin-left:0.3rem; background:#0B3D91; color:#fff; border:none;">${actionBtnLabel}</button>` : ''}
+            ${mapBtnHtml}
           </td>
         </tr>
       `}).join("");
@@ -3407,9 +3473,46 @@ const TOKEN_KEY = "ci_token";
         });
       });
 
+      content.querySelectorAll(".btn-view-map").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const delId = btn.getAttribute("data-del-id");
+          const orderNum = btn.getAttribute("data-order");
+          openDeliveryMapModal(delId, orderNum);
+        });
+      });
+
     } catch (e) {
       content.innerHTML = `<p style="color:#e74c3c;">Failed to load orders: ${e.message}</p>`;
     }
+  }
+
+  function openDeliveryMapModal(deliveryId, orderNum) {
+    const overlay = document.getElementById("modal-overlay");
+    if (!overlay) return;
+    const box = overlay.querySelector(".modal-box");
+    if (!box) return;
+
+    box.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+        <h3 style="margin:0; font-size:1.5rem; color:var(--primary-blue);">Live Tracking - Order #${orderNum}</h3>
+        <button id="btn-close-map-modal" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:var(--text-secondary);">&times;</button>
+      </div>
+      <div id="admin-map-container" style="height: 300px; width: 100%;"></div>
+    `;
+
+    overlay.style.display = "flex";
+
+    document.getElementById("btn-close-map-modal").addEventListener("click", () => {
+      overlay.style.display = "none";
+      if (activeMapInterval) {
+        clearInterval(activeMapInterval);
+        activeMapInterval = null;
+      }
+    });
+
+    setTimeout(() => {
+      renderDeliveryMap("admin-map-container", `/admin/deliveries/${deliveryId}/location`);
+    }, 100);
   }
 
   // ===================== ASSIGN DELIVERY MODAL =====================
