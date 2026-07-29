@@ -1964,8 +1964,15 @@ const TOKEN_KEY = "ci_token";
 
     // Process Form Submit
     const form = document.getElementById("checkout-form");
+    const submitBtn = document.querySelector('button[form="checkout-form"]');
+    
     form?.addEventListener("submit", async (e) => {
       e.preventDefault();
+      
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+      }
 
       const company = document.getElementById("checkout-company").value;
       const gstVal = document.getElementById("checkout-gst").value;
@@ -2094,9 +2101,17 @@ const TOKEN_KEY = "ci_token";
               }, 500);
             }
           } else {
+            if (submitBtn) {
+              submitBtn.disabled = false;
+              submitBtn.innerHTML = '<i class="fas fa-check-double"></i> Confirm Purchase Order';
+            }
             showToast("Failed to initiate Paytm: " + paytmRes.message, "error");
           }
         } catch (err) {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-check-double"></i> Confirm Purchase Order';
+          }
           showToast(err.message || "Failed to place order", "error");
         }
       });
