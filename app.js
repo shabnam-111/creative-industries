@@ -766,7 +766,7 @@ const TOKEN_KEY = "ci_token";
           return;
         }
         if ((cleanPath === '#/customer' || cleanPath === '#/dashboard') && role !== 'customer' && role !== 'client' && role !== 'admin') {
-          showToast("Unauthorized access: Customers only", "error");
+          showToast(`Unauthorized access: Customers only (Debug: role=${role}, user=${state.user ? 'exists' : 'null'})`, "error");
           window.location.hash = "#/";
           return;
         }
