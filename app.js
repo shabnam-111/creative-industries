@@ -1307,13 +1307,6 @@ const TOKEN_KEY = "ci_token";
 
           <!-- Actions -->
           <div style="display:flex; flex-direction:column; gap:1rem; border-top:1px solid var(--border-color); padding-top:1.5rem;">
-              <div style="display:flex; flex-direction:column; gap:0.5rem; margin-bottom:1.5rem;">
-                <label style="display:flex; align-items:center; gap:0.75rem; cursor:pointer; padding:1rem; border:1px solid var(--primary-color); border-radius:var(--border-radius); background:rgba(1,82,204,0.05);">
-                  <input type="radio" name="checkout-payment" value="Paytm" checked>
-                  <img src="https://logodownload.org/wp-content/uploads/2019/09/paytm-logo-2.png" alt="Paytm" style="height:24px;">
-                  <span style="font-weight:600; color:var(--primary-color);">Secure Payment via Paytm</span>
-                </label>
-              </div>
             <div style="display:flex; align-items:center; gap:1.5rem;">
               <span style="font-weight:600; font-size:0.95rem;">Order Qty:</span>
               <div class="qty-selector">
@@ -1914,32 +1907,14 @@ const TOKEN_KEY = "ci_token";
           <div style="background-color:var(--white); padding:2.5rem; border-radius:var(--border-radius-lg); border:1px solid var(--border-color); box-shadow:var(--shadow-sm);">
             <h3 style="font-size:1.35rem; border-bottom:1px solid var(--border-color); padding-bottom:1rem; margin-bottom:1.5rem;"><i class="fas fa-wallet"></i> B2B Payment Method</h3>
             <div class="radio-group">
-              <label class="radio-label">
-                <input type="radio" name="checkout-payment" value="Net 30" checked>
-                <div>
-                  <strong>Net 30 Credit Terms</strong><br>
-                  <span style="font-size:0.8rem; color:var(--text-secondary);">30 days repayment terms for verified industrial clients.</span>
-                </div>
-              </label>
-              <label class="radio-label">
-                <input type="radio" name="checkout-payment" value="Bank Transfer">
-                <div>
-                  <strong>Direct NEFT / RTGS Bank Transfer</strong><br>
-                  <span style="font-size:0.8rem; color:var(--text-secondary);">Confirm order and receive proforma invoice for transfer.</span>
-                </div>
-              </label>
-              <label class="radio-label">
-                <input type="radio" name="checkout-payment" value="UPI">
-                <div>
-                  <strong>Immediate UPI Business</strong><br>
-                  <span style="font-size:0.8rem; color:var(--text-secondary);">Fastest clearance via corporate UPI scanner.</span>
-                </div>
-              </label>
-              <label class="radio-label">
-                <input type="radio" name="checkout-payment" value="Cash on Delivery (Bulk)">
-                <div>
-                  <strong>Cash on Delivery (Bulk Logistic)</strong><br>
-                  <span style="font-size:0.8rem; color:var(--text-secondary);">Pay logistics partner on physical cargo arrival at your plant.</span>
+              <label class="radio-label" style="background:rgba(1,82,204,0.05); border-color:var(--primary-color);">
+                <input type="radio" name="checkout-payment" value="Paytm" checked>
+                <div style="display:flex; align-items:center; gap:1rem;">
+                  <img src="https://logodownload.org/wp-content/uploads/2019/09/paytm-logo-2.png" alt="Paytm" style="height:24px;">
+                  <div>
+                    <strong style="color:var(--primary-color);">Secure Payment via Paytm</strong><br>
+                    <span style="font-size:0.8rem; color:var(--text-secondary);">Pay instantly using UPI, Net Banking, or Credit/Debit Cards.</span>
+                  </div>
                 </div>
               </label>
             </div>
