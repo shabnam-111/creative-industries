@@ -562,7 +562,7 @@ const TOKEN_KEY = "ci_token";
       btn.addEventListener("click", () => {
         const phone = btn.getAttribute("data-phone");
         if (phone) {
-          showToast(`Customer Phone: ${phone}`, "info");
+          window.location.href = `tel:${phone}`;
         } else {
           showToast("Customer phone not available", "error");
         }
