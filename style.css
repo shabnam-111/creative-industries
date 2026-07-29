@@ -2005,6 +2005,10 @@ footer {
 }
 
 @media (max-width: 768px) {
+  .nav-container {
+    justify-content: space-between;
+  }
+  
   .nav-links {
     display: none;
     position: absolute;
@@ -2017,6 +2021,7 @@ footer {
     box-shadow: var(--shadow-md);
     border-bottom: 1px solid var(--border-color);
     gap: 1rem;
+    z-index: 999;
   }
   
   .nav-links.active {
@@ -2050,6 +2055,37 @@ footer {
   .footer-grid {
     grid-template-columns: 1fr;
   }
+
+  .modal-box {
+    width: 95%;
+  }
+
+  .modal-body {
+    padding: 1.25rem;
+  }
+
+  .modal-header {
+    padding: 1.25rem;
+  }
+
+  .compare-items-row {
+    padding: 1rem;
+    gap: 1rem;
+  }
+
+  .compare-pill {
+    min-width: max-content;
+  }
+
+  .section {
+    padding: 1.5rem 1rem;
+  }
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Admin Table Styles */

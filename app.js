@@ -459,7 +459,7 @@ const TOKEN_KEY = "ci_token";
 
       content.innerHTML = `
         <h3>Manage Deliveries (${deliveries.length})</h3>
-        <div style="overflow-x:auto;">
+        <div class="table-responsive">
           <table class="admin-table" style="width:100%; border-collapse:collapse; margin-top:1rem;">
             <thead><tr><th>Order #</th><th>Customer</th><th>Pickup</th><th>Destination</th><th>Expected By</th><th>Vehicle</th><th>Status</th><th></th></tr></thead>
             <tbody>${rows}</tbody>
@@ -3178,7 +3178,7 @@ const TOKEN_KEY = "ci_token";
               <option value="low">Low Stock (≤ 300)</option>
             </select>
           </div>
-          <div style="overflow-x:auto;">
+          <div class="table-responsive">
             <table class="admin-table" style="width:100%; border-collapse:collapse; margin-top:1rem;">
               <thead><tr><th>Name</th><th>SKU</th><th>Price</th><th>Stock</th><th>Actions</th></tr></thead>
               <tbody>${rows || '<tr><td colspan="5">No products found.</td></tr>'}</tbody>
@@ -3333,7 +3333,7 @@ const TOKEN_KEY = "ci_token";
       content.innerHTML = `
         <div class="dashboard-card">
           <h3>All Orders (${orders.length})</h3>
-          <div style="overflow-x:auto;">
+          <div class="table-responsive">
             <table class="admin-table" style="width:100%; border-collapse:collapse; margin-top:1rem; text-align:left;">
               <thead>
                 <tr style="background:#f8f9fa;">
@@ -3534,7 +3534,7 @@ const TOKEN_KEY = "ci_token";
             <h3>All Users (${users.length})</h3>
             <button class="btn btn-primary" id="btn-add-user"><i class="fas fa-plus"></i> Add User</button>
           </div>
-          <div style="overflow-x:auto;">
+          <div class="table-responsive">
             <table class="admin-table" style="width:100%; border-collapse:collapse; text-align:left;">
               <thead>
                 <tr style="background:#f8f9fa;">
@@ -4191,6 +4191,13 @@ const TOKEN_KEY = "ci_token";
     const navLinks = document.getElementById("nav-links");
     toggleBtn?.addEventListener("click", () => {
       navLinks.classList.toggle("active");
+    });
+    
+    // Auto-close mobile menu when a link is clicked
+    navLinks?.querySelectorAll("a").forEach(link => {
+      link.addEventListener("click", () => {
+        navLinks.classList.remove("active");
+      });
     });
 
     // Request quote float button triggers RFQ
