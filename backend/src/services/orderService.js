@@ -203,14 +203,18 @@ export class OrderService {
 
       if (['dispatched', 'delivered'].includes(formattedStatus)) {
         const { data: del, error: delErr } = await supabase.from('deliveries').select('id').eq('order_id', orderId).maybeSingle();
+        if (delErr) throw delErr;
         if (del) {
           const mappedStatus = formattedStatus === 'dispatched' ? 'in_transit' : 'delivered';
-          await supabase.from('deliveries').update({ status: mappedStatus }).eq('id', del.id);
+          const { error: updErr } = await supabase.from('deliveries').update({ status: mappedStatus }).eq('id', del.id);
+          if (updErr) throw updErr;
         }
       } else if (['accepted', 'pending', 'rejected', 'processing'].includes(formattedStatus)) {
         const { data: del, error: delErr } = await supabase.from('deliveries').select('id').eq('order_id', orderId).not('status', 'in', '(delivered,failed,cancelled)').maybeSingle();
+        if (delErr) throw delErr;
         if (del) {
-          await supabase.from('deliveries').update({ status: 'cancelled' }).eq('id', del.id);
+          const { error: updErr } = await supabase.from('deliveries').update({ status: 'cancelled' }).eq('id', del.id);
+          if (updErr) throw updErr;
         }
       }
       updateData.status = formattedStatus;

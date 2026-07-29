@@ -83,7 +83,8 @@ const employeeController = {
         }
 
         // Mark OTP as used
-        await supabase.from('delivery_otps').update({ is_used: true }).eq('id', otpRecord.id);
+        const { error: otpUpdErr } = await supabase.from('delivery_otps').update({ is_used: true }).eq('id', otpRecord.id);
+        if (otpUpdErr) throw otpUpdErr;
       }
 
       const updateData = { status };
@@ -107,9 +108,11 @@ const employeeController = {
 
       // Sync the corresponding order status
       if (['delivered', 'delivery_failed', 'cancelled'].includes(status)) {
-        await supabase.from('orders').update({ status: status === 'delivery_failed' ? 'cancelled' : status }).eq('id', data.order_id);
+        const { error: ordUpdErr } = await supabase.from('orders').update({ status: status === 'delivery_failed' ? 'cancelled' : status }).eq('id', data.order_id);
+        if (ordUpdErr) throw ordUpdErr;
       } else if (status === 'in_transit') {
-        await supabase.from('orders').update({ status: 'dispatched' }).eq('id', data.order_id);
+        const { error: ordUpdErr } = await supabase.from('orders').update({ status: 'dispatched' }).eq('id', data.order_id);
+        if (ordUpdErr) throw ordUpdErr;
       }
 
       res.json({ success: true, message: `Delivery updated to ${status}`, data });

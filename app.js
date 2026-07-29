@@ -84,13 +84,24 @@ const TOKEN_KEY = "ci_token";
   }
   window.addToCart = addToCart;
 
+  // Safe wrapper to prevent local storage crashes
+  function safeJSONParse(key, fallback) {
+    try {
+      const data = localStorage.getItem(key);
+      return data ? JSON.parse(data) : fallback;
+    } catch (e) {
+      console.warn(`Corrupted localStorage key "${key}" detected. Resetting to fallback.`);
+      localStorage.removeItem(key);
+      return fallback;
+    }
+  }
 
   // --- STATE MANAGEMENT ---
   const state = {
-    cart: JSON.parse(localStorage.getItem("ci_cart")) || [],
-    compare: JSON.parse(localStorage.getItem("ci_compare")) || [],
-    recentlyViewed: JSON.parse(localStorage.getItem("ci_recently_viewed")) || [],
-    orders: JSON.parse(localStorage.getItem("ci_orders")) || [
+    cart: safeJSONParse("ci_cart", []),
+    compare: safeJSONParse("ci_compare", []),
+    recentlyViewed: safeJSONParse("ci_recently_viewed", []),
+    orders: safeJSONParse("ci_orders", [
       {
         id: "ORD-92837",
         date: "2026-07-05",
@@ -125,8 +136,8 @@ const TOKEN_KEY = "ci_token";
         status: "Delivered",
         address: "Maruti Suzuki India Ltd., Faridabad Procurement Unit, Haryana"
       }
-    ],
-    user: JSON.parse(localStorage.getItem("ci_user")) || null,
+    ]),
+    user: safeJSONParse("ci_user", null),
     isLoggedIn: !!localStorage.getItem("ci_token"),
     liveStockInterval: null
   };
@@ -3561,7 +3572,12 @@ const TOKEN_KEY = "ci_token";
           const orderNumber = row.getAttribute("data-order-number");
           const destination = row.getAttribute("data-destination");
           const deliveryDataStr = row.getAttribute("data-delivery");
-          const deliveryData = deliveryDataStr ? JSON.parse(decodeURIComponent(deliveryDataStr)) : null;
+          let deliveryData = null;
+          try {
+            deliveryData = deliveryDataStr ? JSON.parse(decodeURIComponent(deliveryDataStr)) : null;
+          } catch (e) {
+            console.warn("Invalid delivery data payload", e);
+          }
           openAssignDeliveryModal(orderId, orderNumber, destination, deliveryData);
         });
       });

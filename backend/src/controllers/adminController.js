@@ -206,13 +206,16 @@ const adminController = {
       if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
       if (role === 'customer' || role === 'client') {
-        const { data: existingCust } = await supabase.from('customers').select('id').eq('user_id', id).maybeSingle();
+        const { data: existingCust, error: existErr } = await supabase.from('customers').select('id').eq('user_id', id).maybeSingle();
+        if (existErr) throw existErr;
         if (existingCust) {
           if (company_name) {
-            await supabase.from('customers').update({ company_name }).eq('user_id', id);
+            const { error: updErr } = await supabase.from('customers').update({ company_name }).eq('user_id', id);
+            if (updErr) throw updErr;
           }
         } else {
-          await supabase.from('customers').insert([{ user_id: id, company_name: company_name || full_name }]);
+          const { error: insErr } = await supabase.from('customers').insert([{ user_id: id, company_name: company_name || full_name }]);
+          if (insErr) throw insErr;
         }
       }
 

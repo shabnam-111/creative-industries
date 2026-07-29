@@ -86,7 +86,8 @@ export const AuthService = {
 
     // 3. Mark OTP as used
     if (otpRecord) {
-      await supabase.from('otps').update({ is_used: true }).eq('id', otpRecord.id);
+      const { error: otpUpdErr } = await supabase.from('otps').update({ is_used: true }).eq('id', otpRecord.id);
+      if (otpUpdErr) console.warn("Failed to mark OTP as used:", otpUpdErr);
     }
 
     // 4. Create customer profile if needed
@@ -203,7 +204,8 @@ export const AuthService = {
     if (updateError) throw new Error('Failed to reset password');
 
     // Mark OTP as used
-    await supabase.from('otps').update({ is_used: true }).eq('id', otpRecord.id);
+    const { error: otpUpdErr } = await supabase.from('otps').update({ is_used: true }).eq('id', otpRecord.id);
+    if (otpUpdErr) throw otpUpdErr;
 
     return { message: 'Password has been reset successfully' };
   },
