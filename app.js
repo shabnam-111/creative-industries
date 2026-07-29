@@ -3661,9 +3661,8 @@ const TOKEN_KEY = "ci_token";
           <div class="form-group">
             <label>Role *</label>
             <select class="form-control" id="mu-role" required>
-              <option value="customer" ${isEdit && user.role === 'customer' ? 'selected' : ''}>Customer</option>
               <option value="employee" ${isEdit && user.role === 'employee' ? 'selected' : ''}>Employee</option>
-              <option value="client" ${isEdit && user.role === 'client' ? 'selected' : ''}>Client</option>
+              <option value="client" ${isEdit && (user.role === 'client' || user.role === 'customer') ? 'selected' : ''}>Client</option>
             </select>
           </div>
           <div class="form-group">
