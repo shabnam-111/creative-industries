@@ -2532,15 +2532,15 @@ const TOKEN_KEY = "ci_token";
           </div>
           <div class="form-group">
             <label>GSTIN Number</label>
-            <input type="text" class="form-control" id="edit-comp-gst" value="${state.user.gstNumber}" pattern="^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$" required>
+            <input type="text" class="form-control" id="edit-comp-gst" value="${state.user.gstNumber || state.user.gst_number || ''}" pattern="^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$" required>
           </div>
           <div class="form-group">
             <label>Contact Person</label>
-            <input type="text" class="form-control" id="edit-comp-person" value="${state.user.contactPerson}" required>
+            <input type="text" class="form-control" id="edit-comp-person" value="${state.user.contactPerson || ''}" required>
           </div>
           <div class="form-group">
             <label>Phone Number</label>
-            <input type="tel" class="form-control" id="edit-comp-phone" value="${state.user.phone}" required>
+            <input type="tel" class="form-control" id="edit-comp-phone" value="${state.user.phone || ''}" required>
           </div>
           <div class="form-group">
             <label>Email Address</label>
@@ -3920,6 +3920,9 @@ const TOKEN_KEY = "ci_token";
                 <input type="text" class="form-control" id="reg-gst" placeholder="GSTIN Number (15-Digit)" pattern="^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$" required>
               </div>
               <div class="form-group">
+                <input type="tel" class="form-control" id="reg-phone" placeholder="Phone Number" required>
+              </div>
+              <div class="form-group">
                 <textarea class="form-control" id="reg-address" placeholder="Business Address" rows="2" required></textarea>
               </div>
               <div class="form-group">
@@ -4036,7 +4039,9 @@ const TOKEN_KEY = "ci_token";
           const normalizedUser = {
             ...data.user,
             companyName: data.user.companyName || data.user.company_name || "",
-            contactPerson: data.user.contactPerson || data.user.company_name || email.split("@")[0],
+            contactPerson: data.user.contactPerson || data.user.full_name || email.split("@")[0],
+            gstNumber: data.user.gstNumber || data.user.gst_number || "",
+            phone: data.user.phone || ""
           };
 
           localStorage.setItem("ci_token", data.token);
@@ -4058,6 +4063,7 @@ const TOKEN_KEY = "ci_token";
           company_name: document.getElementById("reg-company").value,
           full_name: document.getElementById("reg-name").value,
           gst_number: document.getElementById("reg-gst").value,
+          phone: document.getElementById("reg-phone").value,
           address: document.getElementById("reg-address").value,
           email: document.getElementById("reg-email").value,
           password: document.getElementById("reg-pwd").value
@@ -4095,7 +4101,9 @@ const TOKEN_KEY = "ci_token";
           const normalizedUser = {
             ...user,
             companyName: user?.companyName || user?.company_name || tempRegData.company_name,
-            contactPerson: user?.contactPerson || tempRegData.full_name,
+            contactPerson: user?.contactPerson || user?.full_name || tempRegData.full_name,
+            gstNumber: user?.gstNumber || user?.gst_number || tempRegData.gst_number,
+            phone: user?.phone || tempRegData.phone
           };
 
           localStorage.setItem("ci_token", token);

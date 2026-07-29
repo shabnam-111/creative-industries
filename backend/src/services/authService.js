@@ -37,7 +37,7 @@ export const AuthService = {
     return { message: 'OTP sent to email successfully' };
   },
 
-  async register({ email, password, company_name, full_name, gst_number, address, role = 'client', otp }) {
+  async register({ email, password, company_name, full_name, gst_number, address, phone, role = 'client', otp }) {
     if (!otp) throw new Error('OTP is required for registration');
 
     // 1. Verify OTP
@@ -73,7 +73,7 @@ export const AuthService = {
     // 2. Create the base user record
     const { data: user, error: userError } = await supabase
       .from('users')
-      .insert([{ email, password_hash, role, full_name, status: 'active' }])
+      .insert([{ email, password_hash, role, full_name, phone, status: 'active' }])
       .select()
       .single();
 
@@ -101,7 +101,7 @@ export const AuthService = {
     );
 
     return {
-      user: { ...user, company_name, gst_number, address },
+      user: { ...user, company_name, gst_number, address, phone },
       token,
     };
   },
