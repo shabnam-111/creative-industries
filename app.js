@@ -1984,6 +1984,15 @@ const TOKEN_KEY = "ci_token";
             console.warn("Could not save profile during checkout", profileErr);
           }
 
+          // Force sync frontend cart to backend to ensure cart is not empty on the server
+          try {
+            for (const item of state.cart) {
+              await apiCall('/cart/add', { method: 'POST', body: JSON.stringify({ productId: item.productId, quantity: item.qty || item.quantity }) });
+            }
+          } catch (syncErr) {
+            console.warn("Could not sync cart before checkout", syncErr);
+          }
+
           // We create the order first. We will assume the status stays "pending_payment" (handled in db by default or we pass it)
           const res = await apiCall('/orders', {
             method: 'POST',
