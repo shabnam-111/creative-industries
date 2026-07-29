@@ -2181,6 +2181,13 @@ const TOKEN_KEY = "ci_token";
         )
         .map(o => {
           let effStatus = o.status;
+          
+          let deliveriesArray = [];
+          if (Array.isArray(o.deliveries)) {
+             deliveriesArray = o.deliveries;
+          } else if (o.deliveries) {
+             deliveriesArray = [o.deliveries];
+          }
 
           return {
           id: o.order_number,
@@ -2189,7 +2196,7 @@ const TOKEN_KEY = "ci_token";
           address: state.user.address,
           payment: o.remarks || 'Net 30',
           status: effStatus,
-          deliveries: o.deliveries || [],
+          deliveries: deliveriesArray,
           items: (o.items || []).map(i => ({
             productId: i.product_id || i.productId,
             name: i.name,
@@ -3502,10 +3509,10 @@ const TOKEN_KEY = "ci_token";
       <div id="admin-map-container" style="height: 300px; width: 100%;"></div>
     `;
 
-    overlay.style.display = "flex";
+    overlay.classList.add("active");
 
     document.getElementById("btn-close-map-modal").addEventListener("click", () => {
-      overlay.style.display = "none";
+      overlay.classList.remove("active");
       if (activeMapInterval) {
         clearInterval(activeMapInterval);
         activeMapInterval = null;
