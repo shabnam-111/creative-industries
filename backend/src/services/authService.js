@@ -37,24 +37,29 @@ export const AuthService = {
     return { message: 'OTP sent to email successfully' };
   },
 
-  async register({ email, password, company_name, full_name, gst_number, address, phone, role = 'client', otp }) {
-    if (!otp) throw new Error('OTP is required for registration');
+  async register({ email, password, company_name, full_name, gst_number, address, phone, role = 'client', otp, skipOtp = false }) {
+    let otpRecord = null;
+    
+    if (!skipOtp) {
+      if (!otp) throw new Error('OTP is required for registration');
 
-    // 1. Verify OTP
-    const { data: otpRecord } = await supabase
-      .from('otps')
-      .select('*')
-      .eq('email', email)
-      .eq('otp_code', otp)
-      .eq('type', 'register')
-      .eq('is_used', false)
-      .gte('expires_at', new Date().toISOString())
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      // 1. Verify OTP
+      const { data } = await supabase
+        .from('otps')
+        .select('*')
+        .eq('email', email)
+        .eq('otp_code', otp)
+        .eq('type', 'register')
+        .eq('is_used', false)
+        .gte('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-    if (!otpRecord) {
-      throw new Error('Invalid or expired OTP');
+      otpRecord = data;
+      if (!otpRecord) {
+        throw new Error('Invalid or expired OTP');
+      }
     }
 
     const { data: existingUser } = await supabase
@@ -80,7 +85,9 @@ export const AuthService = {
     if (userError) throw userError;
 
     // 3. Mark OTP as used
-    await supabase.from('otps').update({ is_used: true }).eq('id', otpRecord.id);
+    if (otpRecord) {
+      await supabase.from('otps').update({ is_used: true }).eq('id', otpRecord.id);
+    }
 
     // 4. Create customer profile if needed
     if (role === 'client' || role === 'customer') {

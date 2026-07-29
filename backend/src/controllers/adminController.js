@@ -1,6 +1,27 @@
 import { supabase } from '../config/supabase.js';
 import { AuthService } from '../services/authService.js';
 
+// Helper function to reassign sequential EMP IDs based on chronological creation
+async function _reassignEmployeeIds() {
+  try {
+    const { data: employees, error } = await supabase
+      .from('employees')
+      .select('id, employee_id')
+      .order('created_at', { ascending: true });
+      
+    if (error) throw error;
+    
+    for (let i = 0; i < employees.length; i++) {
+      const expectedId = `EMP${String(i + 1).padStart(2, '0')}`;
+      if (employees[i].employee_id !== expectedId) {
+        await supabase.from('employees').update({ employee_id: expectedId }).eq('id', employees[i].id);
+      }
+    }
+  } catch (err) {
+    console.error('Error reassigning employee IDs:', err);
+  }
+}
+
 const adminController = {
   async getDashboardSummary(req, res) {
     try {
@@ -129,7 +150,7 @@ const adminController = {
         return res.status(400).json({ success: false, message: 'Email, password, and full name are required' });
       }
       
-      const allowedRoles = ['customer', 'employee', 'admin', 'client'];
+      const allowedRoles = ['customer', 'employee', 'client'];
       const userRole = allowedRoles.includes(role) ? role : 'customer';
 
       const result = await AuthService.register({
@@ -137,8 +158,19 @@ const adminController = {
         password,
         full_name,
         role: userRole,
-        company_name: company_name || full_name
+        company_name: company_name || full_name,
+        skipOtp: true
       });
+
+      // If creating an employee, insert into employees table and reassign IDs
+      if (userRole === 'employee') {
+        const { error: empError } = await supabase.from('employees').insert([{ 
+          user_id: result.user.id, 
+          employee_id: `EMP_TEMP_${Date.now()}` // Temporary ID, reassign will fix it
+        }]);
+        if (empError) console.error('Failed to insert employee record:', empError);
+        await _reassignEmployeeIds();
+      }
 
       res.status(201).json({ success: true, message: 'User created successfully', data: result.user });
     } catch (error) {
@@ -151,6 +183,17 @@ const adminController = {
     try {
       const { id } = req.params;
       const { full_name, email, role, company_name } = req.body;
+
+      // Prevent modifying to admin
+      if (role === 'admin') {
+        return res.status(400).json({ success: false, message: 'Cannot set role to admin.' });
+      }
+
+      // Prevent modifying existing admin
+      const { data: existingUser } = await supabase.from('users').select('role').eq('id', id).single();
+      if (existingUser && existingUser.role === 'admin') {
+        return res.status(400).json({ success: false, message: 'Cannot modify admin accounts.' });
+      }
 
       const { data: user, error: userError } = await supabase
         .from('users')
@@ -188,6 +231,12 @@ const adminController = {
         return res.status(400).json({ success: false, message: 'You cannot delete your own admin account.' });
       }
 
+      // Prevent deleting admin
+      const { data: existingUser } = await supabase.from('users').select('role').eq('id', id).single();
+      if (existingUser && existingUser.role === 'admin') {
+        return res.status(400).json({ success: false, message: 'Cannot delete admin accounts.' });
+      }
+
       const { data, error } = await supabase
         .from('users')
         .delete()
@@ -197,6 +246,11 @@ const adminController = {
 
       if (error) throw error;
       if (!data) return res.status(404).json({ success: false, message: 'User not found' });
+
+      // If user was an employee, reassign employee IDs
+      if (data.role === 'employee') {
+        await _reassignEmployeeIds();
+      }
 
       res.json({ success: true, message: 'User deleted successfully' });
     } catch (error) {

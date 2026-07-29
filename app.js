@@ -3535,11 +3535,13 @@ const TOKEN_KEY = "ci_token";
           <td style="padding:12px 10px; vertical-align:middle;">${u.customers?.company_name || ''}</td>
           <td style="padding:12px 10px; vertical-align:middle;"><span class="status-badge" style="color:${u.status === 'active' ? '#2E7D32' : '#D62828'};">${u.status}</span></td>
           <td style="padding:12px 10px; vertical-align:middle; white-space:nowrap;">
+            ${u.role !== 'admin' ? `
             <button class="btn btn-outline btn-sm btn-toggle-user-status">
               ${u.status === 'active' ? 'Suspend' : 'Activate'}
             </button>
             <button class="btn btn-primary btn-sm btn-edit-user" style="margin-left:0.3rem;">Edit</button>
             <button class="btn btn-sm btn-delete-user" style="margin-left:0.3rem; background:#D62828; color:#fff; border:none;">Delete</button>
+            ` : '<span style="color:var(--text-secondary); font-size:0.85rem;">Reserved</span>'}
           </td>
         </tr>
       `).join("");
@@ -3661,7 +3663,6 @@ const TOKEN_KEY = "ci_token";
             <select class="form-control" id="mu-role" required>
               <option value="customer" ${isEdit && user.role === 'customer' ? 'selected' : ''}>Customer</option>
               <option value="employee" ${isEdit && user.role === 'employee' ? 'selected' : ''}>Employee</option>
-              <option value="admin" ${isEdit && user.role === 'admin' ? 'selected' : ''}>Admin</option>
               <option value="client" ${isEdit && user.role === 'client' ? 'selected' : ''}>Client</option>
             </select>
           </div>
