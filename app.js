@@ -502,13 +502,19 @@ const TOKEN_KEY = "ci_token";
             </button>
           `).join("")}
         </div>
-        <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+        <div style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom: 1rem;">
           <a href="https://www.google.com/maps/dir/?api=1&destination=${destQuery}" target="_blank" class="btn btn-outline">
             <i class="fas fa-map-marked-alt"></i> Open in Google Maps
           </a>
           <button class="btn btn-outline btn-call-customer" data-phone="${delivery.orders?.users?.phone || ''}">
             <i class="fas fa-phone"></i> Call Customer
           </button>
+          ${['started', 'reached_pickup', 'in_transit'].includes(delivery.status) ? `
+          <button class="btn btn-primary btn-toggle-gps" style="background:${gpsActiveDeliveryId === delivery.id ? '#D62828' : '#10B981'}; border:none;">
+            <i class="fas ${gpsActiveDeliveryId === delivery.id ? 'fa-stop-circle' : 'fa-location-arrow'}"></i> 
+            ${gpsActiveDeliveryId === delivery.id ? 'Stop GPS Tracking' : 'Resume / Start GPS'}
+          </button>
+          ` : ''}
         </div>
         
         <div id="otp-section-${delivery.id}" style="margin-top: 1.5rem; padding: 1.25rem; border: 1px solid var(--border-color); border-radius: var(--border-radius-md); background: #f9fafb;">
@@ -567,6 +573,17 @@ const TOKEN_KEY = "ci_token";
           showToast("Customer phone not available", "error");
         }
       });
+    });
+
+    panel.querySelector(".btn-toggle-gps")?.addEventListener("click", () => {
+      if (gpsActiveDeliveryId === delivery.id) {
+        stopGPS();
+      } else {
+        if (gpsWatchId) stopGPS(); // Stop any other tracking first
+        gpsActiveDeliveryId = delivery.id;
+        startGPS(delivery.id);
+      }
+      renderDeliveryManagePanel(delivery); // Re-render to update the button color/text
     });
 
     panel.querySelector(".btn-send-otp")?.addEventListener("click", async (e) => {
