@@ -242,6 +242,81 @@ export class OrderService {
   }
 
   /**
+   * Cancels an order by client if it hasn't been dispatched yet.
+   */
+  static async cancelOrder(userId, orderId) {
+    const { data: order, error: fetchError } = await supabase
+      .from('orders')
+      .select('*, users(email)')
+      .eq('id', orderId)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+    if (!order) {
+      throw new Error(`Order not found.`);
+    }
+
+    if (order.user_id !== userId) {
+      throw new Error(`You do not have permission to cancel this order.`);
+    }
+
+    const uncancelableStatuses = ['dispatched', 'in_transit', 'arrived_destination', 'delivered', 'cancelled', 'failed'];
+    if (uncancelableStatuses.includes(order.status.toLowerCase())) {
+      throw new Error(`Order cannot be cancelled because it is already ${order.status}.`);
+    }
+
+    // Cancel any pending deliveries
+    const { data: del, error: delErr } = await supabase
+      .from('deliveries')
+      .select('id')
+      .eq('order_id', orderId)
+      .not('status', 'in', '(delivered,failed,cancelled)')
+      .maybeSingle();
+      
+    if (delErr) throw delErr;
+    if (del) {
+      const { error: updErr } = await supabase.from('deliveries').update({ status: 'cancelled' }).eq('id', del.id);
+      if (updErr) throw updErr;
+    }
+
+    // Update order status to cancelled
+    const { data: updatedOrder, error: updateError } = await supabase
+      .from('orders')
+      .update({ status: 'cancelled' })
+      .eq('id', orderId)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+    
+    // Restore stock
+    if (order.items && order.items.length > 0) {
+      for (const item of order.items) {
+        const { data: product, error: prodError } = await supabase
+          .from('products')
+          .select('id, stock')
+          .eq('id', item.product_id)
+          .single();
+          
+        if (product && !prodError) {
+          await supabase
+            .from('products')
+            .update({ stock: product.stock + item.quantity })
+            .eq('id', product.id);
+        }
+      }
+    }
+
+    // Optionally notify
+    const recipientEmail = order.users?.email;
+    if (recipientEmail) {
+      EmailService.sendOrderStatusUpdatedEmail(recipientEmail, updatedOrder);
+    }
+
+    return updatedOrder;
+  }
+
+  /**
    * Get the GPS history for a specific delivery.
    */
   static async getDeliveryLocation(deliveryId) {

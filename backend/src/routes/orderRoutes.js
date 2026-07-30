@@ -21,4 +21,7 @@ clientRouter.get('/:id', verifyToken, OrderController.getOrderById);
 // GET /api/orders/:id/delivery-location - Get live GPS of delivery
 clientRouter.get('/:id/delivery-location', verifyToken, OrderController.getDeliveryLocation);
 
+// PATCH /api/orders/:id/cancel - Cancel an order (Protected: Owner only, before dispatch)
+clientRouter.patch('/:id/cancel', verifyToken, OrderController.cancelOrder);
+
 export default clientRouter;

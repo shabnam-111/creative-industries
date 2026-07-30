@@ -179,4 +179,27 @@ export class OrderController {
       res.status(400).json({ success: false, message: error.message });
     }
   }
+  /**
+   * PATCH /api/orders/:id/cancel - Cancel an order by client.
+   */
+  static async cancelOrder(req, res) {
+    try {
+      const userId = req.user.id;
+      const orderId = req.params.id;
+
+      const updatedOrder = await OrderService.cancelOrder(userId, orderId);
+
+      res.json({
+        success: true,
+        message: `Order #${updatedOrder.order_number} has been cancelled successfully.`,
+        data: updatedOrder
+      });
+    } catch (error) {
+      console.error('Cancel Order Controller Error:', error);
+      res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+  }
 }

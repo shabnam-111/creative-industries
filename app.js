@@ -2577,6 +2577,7 @@ const TOKEN_KEY = "ci_token";
       if (res && res.data) {
         const syncedOrders = res.data.map(o => ({
           id: o.order_number,
+          dbId: o.id,
           date: (o.created_at || new Date().toISOString()).split("T")[0],
           company: state.user.companyName,
           items: o.items.map(i => ({
@@ -2601,6 +2602,8 @@ const TOKEN_KEY = "ci_token";
     let orderRows = "";
     const userOrders = state.orders.filter(o => o.company === state.user.companyName);
     userOrders.forEach(o => {
+      const uncancelableStatuses = ['Dispatched', 'In_transit', 'Arrived_destination', 'Delivered', 'Cancelled', 'Failed'];
+      const canCancel = !uncancelableStatuses.includes(o.status);
       orderRows += `
         <tr style="border-bottom: 1px solid var(--border-color);">
           <td style="padding:1rem; font-weight:700; color:var(--primary-blue);">${o.id}</td>
@@ -2613,14 +2616,15 @@ const TOKEN_KEY = "ci_token";
           <td style="padding:1rem; font-weight:600;">₹${o.total.toLocaleString("en-IN")}</td>
           <td style="padding:1rem;">
             <span style="font-size:0.75rem; font-weight:700; padding:0.2rem 0.5rem; border-radius:30px; 
-              background-color:${o.status === 'Delivered' ? '#DCFCE7' : o.status === 'Dispatched' ? '#E0F2FE' : '#FEF3C7'};
-              color:${o.status === 'Delivered' ? '#15803D' : o.status === 'Dispatched' ? '#0369A1' : '#B45309'};">
+              background-color:${o.status === 'Delivered' ? '#DCFCE7' : o.status === 'Dispatched' ? '#E0F2FE' : o.status === 'Cancelled' ? '#FEE2E2' : '#FEF3C7'};
+              color:${o.status === 'Delivered' ? '#15803D' : o.status === 'Dispatched' ? '#0369A1' : o.status === 'Cancelled' ? '#991B1B' : '#B45309'};">
               ${o.status}
             </span>
           </td>
           <td style="padding:1rem; display:flex; gap:0.25rem;">
             <button class="btn btn-outline btn-sm btn-reorder" data-id="${o.id}" title="Reorder Items"><i class="fas fa-redo"></i> Reorder</button>
             <button class="btn btn-secondary btn-sm btn-dash-invoice" data-id="${o.id}" style="color:var(--text-primary)"><i class="fas fa-file-download"></i></button>
+            ${canCancel && o.dbId ? `<button class="btn btn-outline btn-sm btn-cancel-order" data-dbid="${o.dbId}" style="color:var(--primary-red); border-color:var(--primary-red);" title="Cancel Order"><i class="fas fa-times"></i> Cancel</button>` : ''}
           </td>
         </tr>
       `;
@@ -2697,6 +2701,33 @@ const TOKEN_KEY = "ci_token";
         const orderId = btn.getAttribute("data-id");
         const order = state.orders.find(o => o.id === orderId);
         if (order) generateInvoicePDF(order);
+      });
+    });
+
+    // Cancel order trigger
+    container.querySelectorAll(".btn-cancel-order").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const dbId = btn.getAttribute("data-dbid");
+        if (!dbId) return;
+        
+        if (confirm("Are you sure you want to cancel this order? This action cannot be undone.")) {
+          try {
+            const btnOriginalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cancelling...';
+            btn.disabled = true;
+            
+            const res = await apiCall(`/orders/${dbId}/cancel`, {
+              method: 'PATCH'
+            });
+            
+            showToast("Order cancelled successfully", "success");
+            renderDashboard(); // Refresh to get the updated status
+          } catch (err) {
+            showToast(err.message || "Failed to cancel order", "error");
+            btn.innerHTML = '<i class="fas fa-times"></i> Cancel';
+            btn.disabled = false;
+          }
+        }
       });
     });
 
