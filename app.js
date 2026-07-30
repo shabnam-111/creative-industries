@@ -3561,14 +3561,14 @@ const TOKEN_KEY = "ci_token";
           <td style="padding:12px 10px; vertical-align:middle; text-align:left;">${o.users?.customers?.company_name || o.users?.email || '—'}</td>
           <td style="padding:12px 10px; vertical-align:middle; text-align:left;">₹${o.total_amount}</td>
           <td style="padding:12px 10px; vertical-align:middle; text-align:left;">
-            <select class="form-control admin-order-status" style="width:auto; min-width:130px;">
+            <select class="form-control admin-order-status" style="width:auto; min-width:130px;" ${(effectiveStatus === 'cancelled' || effectiveStatus === 'delivered') ? 'disabled' : ''}>
               ${statuses.map(s => `<option value="${s}" ${s === effectiveStatus ? 'selected' : ''}>${s}</option>`).join("")}
             </select>
           </td>
           <td style="padding:12px 10px; vertical-align:middle; text-align:left;">${deliveryDisplay}</td>
           <td style="padding:12px 10px; vertical-align:middle; text-align:left;">${dEta ? `<span style="font-size:0.85rem;">${dEta}</span>` : '<span style="color:var(--text-secondary); font-size:0.85rem;">—</span>'}</td>
           <td style="padding:12px 10px; vertical-align:middle; text-align:left; white-space:nowrap;">
-            <button class="btn btn-primary btn-sm btn-update-order">Update</button>
+            ${(effectiveStatus === 'cancelled' || effectiveStatus === 'delivered') ? '' : `<button class="btn btn-primary btn-sm btn-update-order">Update</button>`}
             ${o.status === 'accepted' ? `<button class="btn btn-sm btn-assign-delivery" style="margin-left:0.3rem; background:#0B3D91; color:#fff; border:none;">${actionBtnLabel}</button>` : ''}
             ${mapBtnHtml}
           </td>
