@@ -233,7 +233,7 @@ export class OrderService {
     if (updateError) throw updateError;
 
     // Restore stock if the order was just cancelled
-    if (formattedStatus === 'cancelled' && order.status.toLowerCase() !== 'cancelled') {
+    if (updateData.status === 'cancelled' && order.status.toLowerCase() !== 'cancelled') {
       const { data: orderItems, error: itemsError } = await supabase
         .from('order_items')
         .select('product_id, quantity')
