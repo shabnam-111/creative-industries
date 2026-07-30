@@ -409,6 +409,9 @@ const TOKEN_KEY = "ci_token";
   let gpsWatchId = null;
   let gpsActiveDeliveryId = null;
 
+  // ##########################################
+  // ###### EMPLOYEE DASHBOARD ##
+  // ##########################################
   function renderEmployeeDashboard() {
     const container = document.getElementById("app-container");
     container.innerHTML = `
@@ -2568,6 +2571,9 @@ const TOKEN_KEY = "ci_token";
   }
 
   // 13. CUSTOMER DASHBOARD VIEW
+  // ##########################################
+  // ###### CUSTOMER DASHBOARD ##
+  // ##########################################
   async function renderDashboard() {
     const container = document.getElementById("app-container");
 
@@ -3325,6 +3331,9 @@ const TOKEN_KEY = "ci_token";
     doc.save(`Quotation-Estimate-${rfq.comp.replace(/\s+/g, '')}.pdf`);
   };
 
+  // ##########################################
+  // ###### ADMIN DASHBOARD ##
+  // ##########################################
   function renderAdminDashboard() {
     const container = document.getElementById("app-container");
     container.innerHTML = `
