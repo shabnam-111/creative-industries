@@ -39,7 +39,7 @@ const adminController = {
       orders.forEach(order => {
         const status = order.status?.toLowerCase();
         if (statusCount[status] !== undefined) statusCount[status]++;
-        if (status !== 'rejected') totalRevenue += Number(order.total_amount) || 0;
+        if (status !== 'rejected' && status !== 'cancelled') totalRevenue += Number(order.total_amount) || 0;
       });
 
       const lowStock = products.filter(p => p.stock <= 300).length;

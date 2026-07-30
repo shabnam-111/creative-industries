@@ -232,6 +232,33 @@ export class OrderService {
 
     if (updateError) throw updateError;
 
+    // Restore stock if the order was just cancelled
+    if (formattedStatus === 'cancelled' && order.status.toLowerCase() !== 'cancelled') {
+      const { data: orderItems, error: itemsError } = await supabase
+        .from('order_items')
+        .select('product_id, quantity')
+        .eq('order_id', orderId);
+
+      if (!itemsError && orderItems && orderItems.length > 0) {
+        for (const item of orderItems) {
+          const { data: product } = await supabase
+            .from('products')
+            .select('id, stock')
+            .eq('id', item.product_id)
+            .single();
+
+          if (product) {
+            await supabase
+              .from('products')
+              .update({ stock: product.stock + item.quantity })
+              .eq('id', product.id);
+          }
+        }
+      }
+    }
+
+    if (updateError) throw updateError;
+
     // 4. Send email notification to user
     const recipientEmail = order.users?.email;
     if (recipientEmail && status && order.status.toLowerCase() !== status.toLowerCase()) {
