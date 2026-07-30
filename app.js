@@ -2706,28 +2706,32 @@ const TOKEN_KEY = "ci_token";
 
     // Cancel order trigger
     container.querySelectorAll(".btn-cancel-order").forEach(btn => {
-      btn.addEventListener("click", async () => {
+      btn.addEventListener("click", () => {
         const dbId = btn.getAttribute("data-dbid");
         if (!dbId) return;
         
-        if (confirm("Are you sure you want to cancel this order? This action cannot be undone.")) {
-          try {
-            const btnOriginalText = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cancelling...';
-            btn.disabled = true;
-            
-            const res = await apiCall(`/orders/${dbId}/cancel`, {
-              method: 'PATCH'
-            });
-            
-            showToast("Order cancelled successfully", "success");
-            renderDashboard(); // Refresh to get the updated status
-          } catch (err) {
-            showToast(err.message || "Failed to cancel order", "error");
-            btn.innerHTML = '<i class="fas fa-times"></i> Cancel';
-            btn.disabled = false;
+        showConfirmModal(
+          "Cancel Order",
+          "Are you sure you want to cancel this order? This action cannot be undone.",
+          async () => {
+            try {
+              const btnOriginalText = btn.innerHTML;
+              btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cancelling...';
+              btn.disabled = true;
+              
+              const res = await apiCall(`/orders/${dbId}/cancel`, {
+                method: 'PATCH'
+              });
+              
+              showToast("Order cancelled successfully", "success");
+              renderDashboard(); // Refresh to get the updated status
+            } catch (err) {
+              showToast(err.message || "Failed to cancel order", "error");
+              btn.innerHTML = '<i class="fas fa-times"></i> Cancel';
+              btn.disabled = false;
+            }
           }
-        }
+        );
       });
     });
 
