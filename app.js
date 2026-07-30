@@ -2572,7 +2572,7 @@ const TOKEN_KEY = "ci_token";
 
   // 13. CUSTOMER DASHBOARD VIEW
   // ##########################################
-  // ###### CUSTOMER DASHBOARD ##
+  // ###### CLIENT DASHBOARD ##
   // ##########################################
   async function renderDashboard() {
     const container = document.getElementById("app-container");
